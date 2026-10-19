@@ -15,13 +15,13 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from remote import load_conf, connect  # noqa: E402
 
-OK_MARK = "=== ENV OK ==="
 FAIL_MARK = "!!"
-MAX_MINUTES = 180
 INTERVAL = 90
 
 LOG_NAME = sys.argv[1] if len(sys.argv) > 1 else "install.log"
 PROC_KEY = sys.argv[2] if len(sys.argv) > 2 else "install_env.sh"
+OK_MARK = sys.argv[3] if len(sys.argv) > 3 else "=== ENV OK ==="
+MAX_MINUTES = int(sys.argv[4]) if len(sys.argv) > 4 else 180
 
 
 def grep_bracket(key: str) -> str:

@@ -1,6 +1,6 @@
 # 进度看板
 
-最后更新：2026-10-19 11:30
+最后更新：2026-10-19 17:05
 
 ## 备份机制（已启用）
 
@@ -23,28 +23,32 @@
 | 阶段 | 内容 | 状态 | 时间 |
 |---|---|---|---|
 | P0 | 技术调研：AMP 实现 / 数据集 / 版本兼容 | ✅ 完成 | 10:19-10:45 |
-| P1 | 服务器开通 + 环境安装 | 🔄 **进行中** | 10:45- |
-| P2 | legged_lab + rsl_rl(AMP) + G1 模型/动作数据 | ⏳ 待 P1 | — |
-| P3 | 参考动作体检 + motion viewer 目视 | ⏳ 待 P2 | — |
-| P4 | AMP 行走训练（首个可看步态） | ⏳ 待 P3 | — |
-| P5 | 走跑切换（多 clip discriminator + 速度指令） | ⏳ 待 P4 | — |
+| P1 | 服务器开通 + 环境安装 | ✅ **完成** | 10:45-16:34（踩了 8 个坑） |
+| P2 | legged_lab + rsl_rl(AMP) + G1 模型/动作数据 | ✅ **完成** | 16:28-16:57 |
+| P3 | 参考动作体检 + motion viewer 目视 | ⏳ 明早评估前做 | — |
+| P4 | AMP 行走训练 | 🔄 **训练中** | 17:02 开跑，ETA 22:00 |
+| P5 | 走跑切换（速度指令覆盖测试） | ⏳ 待 P4 | — |
 | P6 | 量化评估 + 录视频 + 技术报告 + 仓库 | ⏳ 待 P5 | — |
 
-## 当前：P1 环境安装
+## 当前：P4 正式训练（4096 envs × 5000 iter）
 
-| 子步骤 | 状态 | 说明 |
-|---|---|---|
-| 服务器开通 | ✅ | 3090 24G / Ubuntu 22.04 / 数据盘 200G→/data |
-| 网络预检 | ✅ | GitHub、LFS、HF、pypi.nvidia.com 全通 |
-| conda env (py3.11) | ✅ | `/data/envs/isaaclab`，Python 3.11.17 |
-| torch 2.7.0+cu128 | ✅ | `cuda True` 已验证 |
-| isaacsim 5.1.0 | ✅ | 20GB 装完，`import isaacsim` OK（EULA 用 `yes Yes |` 管道接受） |
-| IsaacLab v2.3.2 | 🔄 **进行中** | clone 完成 `37ddf62`，正在 `--install rsl_rl skrl` |
-| headless 冒烟测试 | ⏳ 待上面完成 | |
+- 任务：`LeggedLab-Isaac-AMP-G1-v0`（velocity-conditioned AMP）
+- 数据：`MotionData/g1_29dof/amp/walk_and_run/`（26 个 pkl：走/跑/转身/切换）
+- 实测：**3.49s/iter，GPU 80%，显存 10.9G/24G**，ETA ≈ 5h（22:00 完成）
+- checkpoint：`/data/legged_lab/logs/rsl_rl/g1_amp/<时间戳>/`（rsl_rl 定期保存）
+- 日志：`/data/logs/train_main.log`（本地监控进程每 90s 检查，异常自动通知）
+- 首迭代指标：`Episode_Reward/style: 0.0482`（风格奖励在算）、`bad_orientation: 1.0`（初始全摔，正常）
 
-日志位置（服务器）：`/data/logs/install.log`（Sim）、`/data/logs/install_lab.log`（Lab）
-本地备份：`backup/server/<时间戳>/data/logs/`
-监控：本地后台 `wait_install.py install_lab.log 04_install_isaaclab`
+## P1 环境安装（已完成，8 个坑全记录在开发日志）
+
+| 子步骤 | 状态 |
+|---|---|
+| conda env py3.11 + torch 2.7.0+cu128 | ✅ |
+| isaacsim 5.1.0（EULA `yes Yes \|` 管道） | ✅ |
+| IsaacLab v2.3.2（flatdict 需 setuptools 降 80.9） | ✅ |
+| rsl_rl AMP fork 3.2.0（PIP_CONSTRAINT 锁 torch） | ✅ |
+| legged_lab 0.1.0 + G1 USD + 26 个 AMP pkl | ✅ |
+| 训练链路验证（2 iter smoke：reward 有值、checkpoint 落盘） | ✅ |
 
 ## 风险与降级
 
