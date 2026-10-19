@@ -1,7 +1,12 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-"""轮询远程安装进度：每 120s 查一次 /data/logs/install.log，
-成功(=== ENV OK ===)或失败(!! 标记 / 进程消失)时退出并打印结论。"""
+"""轮询远程安装进度，成功(=== ENV OK ===)或失败(!! / 进程消失)时退出并打印结论。
+
+用法：
+    python scripts/wait_install.py                     # 默认盯 install.log
+    python scripts/wait_install.py install_lab.log     # 盯 IsaacLab 安装
+    python scripts/wait_install.py install_lab.log 04_install_isaaclab
+"""
 import re
 import sys
 import time
@@ -12,29 +17,36 @@ from remote import load_conf, connect  # noqa: E402
 
 OK_MARK = "=== ENV OK ==="
 FAIL_MARK = "!!"
-MAX_MINUTES = 150
-INTERVAL = 120
+MAX_MINUTES = 180
+INTERVAL = 90
+
+LOG_NAME = sys.argv[1] if len(sys.argv) > 1 else "install.log"
+PROC_KEY = sys.argv[2] if len(sys.argv) > 2 else "install_env.sh"
+
+
+def grep_bracket(key: str) -> str:
+    """把 install_isaaclab -> [i]nstall_isaaclab，避免 grep 匹配到执行它的 shell 自身"""
+    return "[" + key[0] + "]" + key[1:]
 
 
 def check() -> tuple[str, str]:
-    """返回 (状态, 日志尾部)"""
     cli = connect(load_conf())
     try:
-        # 注意: 用字符类 [i]nstall_env 避免 grep/pgrep 匹配到执行这条命令的 shell 自身
-        _stdin, stdout, _stderr = cli.exec_command(
-            "tail -30 /data/logs/install.log; echo __PROC__; "
-            "ps -eo cmd | grep -c '[i]nstall_env.sh'",
-            timeout=30,
+        cmd = (
+            f"tail -30 /data/logs/{LOG_NAME} 2>/dev/null; echo __PROC__; "
+            f"ps -eo cmd | grep -c '{grep_bracket(PROC_KEY)}'"
         )
+        _stdin, stdout, _stderr = cli.exec_command(cmd, timeout=30)
         out = stdout.read().decode("utf-8", "replace")
     finally:
         cli.close()
-    log_part, proc_part = out.split("__PROC__")
+    if "__PROC__" not in out:
+        return "RUNNING", out
+    log_part, proc_part = out.split("__PROC__", 1)
     if OK_MARK in log_part:
         return "OK", log_part
     if FAIL_MARK in log_part:
         return "FAIL", log_part
-    # proc count == 0 表示安装进程已退出（未完成 => 异常）
     try:
         alive = int(proc_part.strip().splitlines()[0]) > 0
     except (ValueError, IndexError):
@@ -45,6 +57,7 @@ def check() -> tuple[str, str]:
 
 
 def main() -> int:
+    print(f"watching /data/logs/{LOG_NAME} (proc key={PROC_KEY})")
     start = time.time()
     last_tail = ""
     while time.time() - start < MAX_MINUTES * 60:
@@ -59,11 +72,9 @@ def main() -> int:
                 print(f"INSTALL_{status}")
                 print(tail)
                 return 1
-            step = ""
             m = re.findall(r"\[([\d\- :]+)\] (Step \d/\d[^\n]*)", tail)
-            if m:
-                step = f"{m[-1][0]} {m[-1][1]}"
-            print(f"[poll] still running... {step or tail.strip().splitlines()[-1:]}")
+            step = f"{m[-1][0]} {m[-1][1]}" if m else ""
+            print(f"[poll] still running... {step or (tail.strip().splitlines()[-1:] or [''])[0]}")
         except Exception as e:  # noqa: BLE001
             print(f"[poll] transient error: {e}")
         time.sleep(INTERVAL)

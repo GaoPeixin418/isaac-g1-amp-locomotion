@@ -35,13 +35,14 @@
 | 服务器开通 | ✅ | 3090 24G / Ubuntu 22.04 / 数据盘 200G→/data |
 | 网络预检 | ✅ | GitHub、LFS、HF、pypi.nvidia.com 全通 |
 | conda env (py3.11) | ✅ | `/data/envs/isaaclab`，Python 3.11.17 |
-| torch 2.7.0+cu128 | 🔄 **进行中** | 11:00 开始，env 已到 6.8G |
-| isaacsim 5.1.0 | ⏳ 排队 | ~20GB，最慢一步 |
-| IsaacLab v2.3.2 | ⏳ | |
-| headless 冒烟测试 | ⏳ | |
+| torch 2.7.0+cu128 | ✅ | `cuda True` 已验证 |
+| isaacsim 5.1.0 | ✅ | 20GB 装完，`import isaacsim` OK（EULA 用 `yes Yes |` 管道接受） |
+| IsaacLab v2.3.2 | 🔄 **进行中** | clone 完成 `37ddf62`，正在 `--install rsl_rl skrl` |
+| headless 冒烟测试 | ⏳ 待上面完成 | |
 
-日志位置（服务器）：`/data/logs/install.log`
-本地备份：`backup/server/<时间戳>/data/logs/install.log`
+日志位置（服务器）：`/data/logs/install.log`（Sim）、`/data/logs/install_lab.log`（Lab）
+本地备份：`backup/server/<时间戳>/data/logs/`
+监控：本地后台 `wait_install.py install_lab.log 04_install_isaaclab`
 
 ## 风险与降级
 
