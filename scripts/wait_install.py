@@ -34,7 +34,8 @@ def check() -> tuple[str, str]:
     try:
         cmd = (
             f"tail -30 /data/logs/{LOG_NAME} 2>/dev/null; echo __PROC__; "
-            f"ps -eo cmd | grep -c '{grep_bracket(PROC_KEY)}'"
+            f"ps -eo cmd | grep -c '{grep_bracket(PROC_KEY)}'; echo __MTIME__; "
+            f"expr $(date +%s) - $(stat -c %Y /data/logs/{LOG_NAME} 2>/dev/null || echo $(date +%s))"
         )
         _stdin, stdout, _stderr = cli.exec_command(cmd, timeout=30)
         out = stdout.read().decode("utf-8", "replace")
@@ -42,16 +43,29 @@ def check() -> tuple[str, str]:
         cli.close()
     if "__PROC__" not in out:
         return "RUNNING", out
-    log_part, proc_part = out.split("__PROC__", 1)
+    log_part, rest = out.split("__PROC__", 1)
     if OK_MARK in log_part:
         return "OK", log_part
     if FAIL_MARK in log_part:
         return "FAIL", log_part
+    # 判据 1：进程数
+    alive = True
+    mtime = None
+    if "__MTTIME__" in rest:
+        proc_part, mtime_part = rest.split("__MTIME__", 1)
+    else:
+        proc_part, mtime_part = rest, ""
     try:
         alive = int(proc_part.strip().splitlines()[0]) > 0
     except (ValueError, IndexError):
         alive = True
-    if not alive:
+    try:
+        mtime = int(mtime_part.strip().splitlines()[0])
+    except (ValueError, IndexError):
+        mtime = None
+    # 判据 2：日志 mtime 超过 5 分钟没更新 → 进程僵死/已退出但没留标记
+    stale = mtime is not None and mtime > 300
+    if not alive or stale:
         return "DEAD", log_part
     return "RUNNING", log_part
 
