@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# 日志与训练产物（不要进仓库，太大）
+logs/
+runs/
+outputs/
+*.pt
+*.ckpt
+*.onnx
+wandb/
+
+# 大文件：motion 数据、USD 模型
+*.npz
+*.usd
+*.usda
+*.usdc
+motions/
+data/motions/
+
+# 视频
+*.mp4
+*.webm
+
+# Hydra / 系统
+.hydra/
+.DS_Store
+.vscode/
