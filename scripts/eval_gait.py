@@ -24,6 +24,7 @@
 """
 import argparse
 import os
+import sys
 import time
 
 import numpy as np
@@ -41,7 +42,11 @@ parser.add_argument("--out", type=str, default="/data/eval_out")
 parser.add_argument("--no_push", action="store_true", default=True,
                     help="关闭 push_robot 扰动，得到干净的步态数据")
 AppLauncher.add_app_launcher_args(parser)
-args_cli = parser.parse_args()
+args_cli, hydra_args = parser.parse_known_args()
+
+# 必须把 Hydra 不认识的参数从 sys.argv 里剔掉，否则 hydra 会报
+# "unrecognized arguments"。这是 Isaac Lab 脚本的标准写法。
+sys.argv = [sys.argv[0]] + hydra_args
 
 app_launcher = AppLauncher(args_cli)
 simulation_app = app_launcher.app
