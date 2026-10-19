@@ -10,7 +10,9 @@
 |---|---|---|
 | 服务器 | `/data`（200G 数据盘） | 环境/代码/训练产物都在数据盘，实例重启不丢 |
 | 本地 | `backup/server/<时间戳>/` | `scripts/sync_from_server.py` 每 10 分钟自动拉回日志/脚本/配置 |
-| Git | 本地仓库 + GitHub(待挂 remote) | `scripts/backup_loop.py` 自动 commit + push |
+| Git | 本地仓库 + **GitHub ✅** | `scripts/backup_loop.py` 自动 commit + push；仓库 <https://github.com/GaoPeixin418/isaac-g1-amp-locomotion>（分支 `main`） |
+
+> 注：`backup/` 本地快照已移出 git（每轮一个新目录会撑爆仓库），git 只存源码/文档/脚本。
 
 已启动的后台进程：
 - `scripts/wait_install.py` —— 每 120s 查安装日志，完成/失败自动通知

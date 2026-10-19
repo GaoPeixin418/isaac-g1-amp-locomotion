@@ -9,12 +9,14 @@
 
 | 项目 | 状态 | 说明 |
 |---|---|---|
-| 本仓库 git | ✅ | `D:\workbuddy\...\g1-amp-locomotion`，已有 3 条 commit |
+| 本仓库 git | ✅ | `D:\workbuddy\...\g1-amp-locomotion` |
 | git 身份 | ✅ | `gpx / gpeixin0@gmail.com` |
 | 本地 SSH 密钥 | ✅ 已生成 | `C:\Users\GPX\.ssh\id_ed25519`（ed25519） |
-| GitHub 建仓库 | ⏳ **需要你做** | 见下方步骤 A |
-| GitHub 添加 SSH 公钥 | ⏳ **需要你做** | 见下方步骤 B |
-| remote 挂载 + 首次 push | ⏳ 等你给仓库名 | 我来做 |
+| GitHub 建仓库 | ✅ | <https://github.com/GaoPeixin418/isaac-g1-amp-locomotion> |
+| GitHub 添加 SSH 公钥 | ✅ | `ssh -T` 返回 `Hi GaoPeixin418! You've successfully authenticated` |
+| remote 挂载 + 首次 push | ✅ | `origin → main`，已建立追踪，备份循环会自动 push |
+
+> 下方步骤 A / B 已完成，保留作为操作记录。
 
 ---
 
