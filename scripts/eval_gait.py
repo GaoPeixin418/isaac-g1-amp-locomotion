@@ -120,7 +120,15 @@ def main(env_cfg, agent_cfg):
     has_contact = "contact_forces" in base_env.scene.sensors or (
         "contact_forces" in getattr(base_env.scene, "_sensors", {})
     )
-    print(f"[INFO] contact sensor available: {has_contact}")
+    # 关键坑：ContactSensor.data.net_forces_w 只有**被配置的 body**（本例 2 个），
+    # 不是 robot 的全部 30 个 link。必须用 sensor 自己的 body index 去取，
+    # 用 robot 的全局 body index 会静默采到全 0（实测踩过）。
+    sensor_ids = None
+    if has_contact:
+        csensor = base_env.scene["contact_forces"]
+        found_ids, found_names = csensor.find_bodies(".*_ankle_roll_link")
+        sensor_ids = torch.tensor(found_ids, device=base_env.device)
+        print(f"[INFO] contact sensor body ids={found_ids} names={found_names}")
 
     # 机器人总质量（用于 CoT）。
     # 注意 get_masses() 返回 (N, num_links)，必须只取一个 env 再求和，
@@ -167,9 +175,9 @@ def main(env_cfg, agent_cfg):
             records["torque"].append(robot.data.applied_torque.cpu().numpy().astype(np.float32))
             records["joint_vel"].append(robot.data.joint_vel.cpu().numpy().astype(np.float32))
             if has_contact:
-                sensor = base_env.scene["contact_forces"]
+                csensor = base_env.scene["contact_forces"]
                 records["foot_force_z"].append(
-                    sensor.data.net_forces_w[:, foot_ids, 2].cpu().numpy().astype(np.float32)
+                    csensor.data.net_forces_w[:, sensor_ids, 2].cpu().numpy().astype(np.float32)
                 )
             try:
                 records["cmd_x"].append(
