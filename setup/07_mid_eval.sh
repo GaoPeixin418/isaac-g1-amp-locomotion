@@ -22,22 +22,29 @@ PY=/data/envs/isaaclab/bin/python
 TASK=${TASK:-LeggedLab-Isaac-AMP-G1-v0}
 RUN=${RUN:-2026-10-19_16-37-21}
 CKPT=${CKPT:-model_1600.pt}
-NUM_ENVS=${NUM_ENVS:-16}
-VIDEO_LEN=${VIDEO_LEN:-400}
+NUM_ENVS=${NUM_ENVS:-4}
+VIDEO_LEN=${VIDEO_LEN:-800}
 
 log() { echo "[$(date '+%m-%d %H:%M:%S')] $*"; }
 
 cd /data/legged_lab || exit 1
-log "play: task=$TASK run=$RUN ckpt=$CKPT num_envs=$NUM_ENVS video_len=$VIDEO_LEN"
 
-yes Yes | "$PY" scripts/rsl_rl/play.py \
+# retrieve_file_path() 只做 os.path.isfile 检查，不做拼接 → 必须给绝对路径
+CKPT_PATH=/data/legged_lab/logs/rsl_rl/g1_amp/$RUN/$CKPT
+if [ ! -f "$CKPT_PATH" ]; then
+    log "!! checkpoint 不存在: $CKPT_PATH"
+    ls -1 /data/legged_lab/logs/rsl_rl/g1_amp/$RUN/ | tail -5
+    exit 1
+fi
+log "play: task=$TASK ckpt=$CKPT_PATH num_envs=$NUM_ENVS video_len=$VIDEO_LEN"
+
+timeout -s KILL 1200 yes Yes | "$PY" scripts/rsl_rl/play.py \
     --task "$TASK" \
     --headless \
     --num_envs "$NUM_ENVS" \
     --video \
     --video_length "$VIDEO_LEN" \
-    --load_run "$RUN" \
-    --checkpoint "$CKPT" 2>&1
+    --checkpoint "$CKPT_PATH" 2>&1
 
 log "=== PLAY DONE (exit=$?) ==="
 echo "=== 视频目录 ==="
