@@ -30,3 +30,7 @@ data/motions/
 .hydra/
 .DS_Store
 .vscode/
+.secrets/
+
+# 临时命令/输出文件
+tmp/
