@@ -18,8 +18,8 @@ from pathlib import Path
 import numpy as np
 
 TERMS = {
-    "stride_freq": "步频 (Hz)",
-    "stride_len": "步长 (m)",
+    "stride_freq": "步频 steps/s (单脚)",
+    "stride_len": "步长 (m/stride)",
     "foot_clear": "足端抬升 (m)",
     "duty_factor": "支撑占比",
     "cot": "运输能耗 CoT",
@@ -67,14 +67,19 @@ def main() -> int:
     foot_z = data["foot_z"]              # (T, N, 2)  世界坐标下的足端高度
     has_force = "foot_force_z" in data.files
 
-    print(f"数据：{npz_path.name}  T={T} ({T*dt:.1f}s)  N={N}  dt={dt}")
+    # 前 WARMUP 秒是「从参考姿态站起来」的过程，速度还没起来，
+    # 计进去会把低速档的统计严重拉偏。实测有的 env 前 6 秒几乎静止。
+    WARMUP = int(5.0 / dt)
+    print(f"数据：{npz_path.name}  T={T} ({T*dt:.1f}s)  N={N}  dt={dt}  "
+          f"warmup 剔除前 {WARMUP} 步 ({WARMUP*dt:.0f}s)")
     print(f"足部 link 数：{foot_z.shape[2]}\n")
 
     rows = []
     for i in range(N):
         cmd_x = float(vels[i])
-        vx = data["lin_vel_x"][:, i]
-        vy = data["lin_vel_y"][:, i]
+        vx = data["lin_vel_x"][WARMUP:, i]
+        vy = data["lin_vel_y"][WARMUP:, i]
+        Tw = T - WARMUP
 
         # --- 接触判定 ---
         # 优先用足端高度（采集最稳），而不是接触力。
@@ -82,7 +87,7 @@ def main() -> int:
         #       用 robot 全局 body index 去索引会错位，实测采出来全 0。
         # 判定：脚贴近地面最低值 = stance，抬起来 = swing。
         # 阈值自适应 —— 取每条序列的 15% 分位 + 3cm 余量。
-        z = foot_z[:, i, :]                      # (T, 2)
+        z = foot_z[WARMUP:, i, :]                      # (Tw, 2)
         thr = np.percentile(z, 15, axis=0) + 0.03
         stance = z < thr                         # True = 踩在地上
 
@@ -103,16 +108,22 @@ def main() -> int:
                              lateral_drift=float("nan")))
             continue
 
+        # 时间序列的其他数据也要跟着跳过 warmup，否则 CoT 的能量和距离对不上
         freq = float(np.mean([p[0] for p in per_foot]))
         duty = float(np.mean([p[1] for p in per_foot]))
         clear = float(np.nanmean([p[2] for p in per_foot]))
 
         mean_v = float(vx.mean())
-        dist = mean_v * T * dt
-        stride_len = mean_v / freq if freq > 1e-6 else float("nan")
+        dist = mean_v * Tw * dt
+        # 一个 stride = 左右脚各迈一步 = 2 步
+        stride_len = 2.0 * mean_v / freq if freq > 1e-6 else float("nan")
+
+        # 诊断：把有效时长切成 4 段看速度是否稳定（某个 env 可能中途摔倒/减速）
+        seg = [float(s.mean()) for s in np.array_split(vx, 4)]
+        print(f"  env{i} cmd={cmd_x:.1f} 分段均速={['%.2f' % s for s in seg]}")
 
         # CoT = Σ|τ·ω| dt / (m g d)
-        power = np.abs(data["torque"][:, i, :] * data["joint_vel"][:, i, :]).sum(axis=1)
+        power = np.abs(data["torque"][WARMUP:, i, :] * data["joint_vel"][WARMUP:, i, :]).sum(axis=1)
         energy = float(power.sum() * dt)
         cot = energy / (mass * 9.81 * abs(dist)) if abs(dist) > 1e-3 else float("nan")
 
