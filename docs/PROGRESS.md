@@ -35,11 +35,51 @@
 - **下次开机无需重装**：重开后直接 `cd /data/legged_lab` 就能跑，省掉今天那 5.8 小时
 - ⚠️ **关机约 7 天实例会被自动释放** → 若一周内不再用，务必确认上面的保全清单全绿
 
+### 更新：用户选「等跑完 5000」+「明天可能再训/调 style 权重」
+
+**关键原则：训练跑完那一刻 GPU 就空转了，空转 = 纯烧钱。**
+所以只有两条路：① 立刻关机 ② 立刻排第二轮实验。绝不让它挂着过夜等明天。
+
+采纳方案：**今晚 21:40 关机 → 明早按需开机**。理由——重开无需重装环境
+（`/data` 保留 21G env + 数据集），开机后 5 分钟就能开训，比通宵空转省得多。
+
+#### 🔑 找到 style 权重的旋钮（明早调参用）
+
+`/data/legged_lab/source/.../amp/config/g1/agents/rsl_rl_ppo_cfg.py`：
+
+```python
+amp_discriminator=RslRlAmpCfg.AMPDiscriminatorCfg(
+    hidden_dims=[1024, 512], activation="elu",
+    style_reward_scale=2.0,      # 风格奖励的绝对缩放
+    task_style_lerp=0.5,         # ← 任务 vs 风格 的插值系数，AMP 原文的核心权重
+)
+```
+
+`task_style_lerp` 含义：`r_final = (1-λ)·r_task + λ·r_style`
+- λ↑ → 更像人，但可能站不稳、跟不上速度指令
+- λ↓ → 更稳，但退回「能走但僵硬」的老路
+- **面试价值**：做 λ = 0.3 / 0.5 / 0.7 三档消融，对比 duty-factor 曲线与 CoT，
+  是能讲出道理的 ablation（比单纯「我调了参数」强得多）
+
+#### 明早开工（一条命令，脚本已就绪）
+
+```bash
+# 续训（从 model_5000 接着训到 7000，约 1.6h）
+MODE=resume MAX_ITER=7000 LERP=0.5 nohup bash /data/setup/08_train_resume.sh > /data/logs/train_resume.log 2>&1 &
+
+# 加重风格权重做对照（约 1.6h）
+MODE=resume MAX_ITER=7000 LERP=0.7 nohup bash /data/setup/08_train_resume.sh > /data/logs/train_lerp07.log 2>&1 &
+```
+
+`scripts/rsl_rl/train.py` 支持 `--resume --load_run <run>`；`08_train_resume.sh`
+会自动 sed 改配置并存 `.bak`，改没改对用 `git diff` 自查即可。
+
+⚠️ 无论如何，**别让实例连续关机超过 7 天**（平台会自动释放 /data）。
+
 ### 明天是否可以全天关机？
 
-**可以**，前提是今晚把服务器侧的活做完。明天只做本地工作（视频剪辑、写报告、做对比图），
-不开机 = 0 成本。若发现视频素材不够（如缺侧向镜头/转身镜头），再开机补一次即可，
-因为环境完好，成本只是一次启停。
+**取决于上面的选择**：若明天只做本地工作（剪辑/报告）→ 全天关机 = 0 成本。
+若要做 style 消融 → 明早开机跑 1-2 轮即可，**跑完立刻关**。
 
 ## 备份机制（已启用）
 
