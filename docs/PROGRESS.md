@@ -1,6 +1,20 @@
 # 进度看板
 
-最后更新：2026-10-19 11:15
+最后更新：2026-10-19 11:30
+
+## 备份机制（已启用）
+
+三层保护，防止任何一端丢失：
+
+| 层 | 位置 | 说明 |
+|---|---|---|
+| 服务器 | `/data`（200G 数据盘） | 环境/代码/训练产物都在数据盘，实例重启不丢 |
+| 本地 | `backup/server/<时间戳>/` | `scripts/sync_from_server.py` 每 10 分钟自动拉回日志/脚本/配置 |
+| Git | 本地仓库 + GitHub(待挂 remote) | `scripts/backup_loop.py` 自动 commit + push |
+
+已启动的后台进程：
+- `scripts/wait_install.py` —— 每 120s 查安装日志，完成/失败自动通知
+- `scripts/backup_loop.py` —— 每 600s 同步 + commit（配了 remote 就 push）
 
 ## 总览
 
@@ -21,8 +35,8 @@
 | 服务器开通 | ✅ | 3090 24G / Ubuntu 22.04 / 数据盘 200G→/data |
 | 网络预检 | ✅ | GitHub、LFS、HF、pypi.nvidia.com 全通 |
 | conda env (py3.11) | ✅ | `/data/envs/isaaclab`，Python 3.11.17 |
-| torch 2.7.0+cu128 | 🔄 排队中 | |
-| isaacsim 5.1.0 | 🔄 排队中 | ~20GB，最慢一步 |
+| torch 2.7.0+cu128 | 🔄 **进行中** | 11:00 开始，env 已到 6.8G |
+| isaacsim 5.1.0 | ⏳ 排队 | ~20GB，最慢一步 |
 | IsaacLab v2.3.2 | ⏳ | |
 | headless 冒烟测试 | ⏳ | |
 
