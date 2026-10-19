@@ -64,11 +64,11 @@ def main() -> int:
     mass = float(data["mass"])
     vels = data["velocities"]
     T, N = data["lin_vel_x"].shape
-    foot = data["foot_pos_b"]          # (T, N, 2, 3)
+    foot_z = data["foot_z"]              # (T, N, 2)  世界坐标下的足端高度
     has_force = "foot_force_z" in data.files
 
     print(f"数据：{npz_path.name}  T={T} ({T*dt:.1f}s)  N={N}  dt={dt}")
-    print(f"足部 link 数：{foot.shape[2]}\n")
+    print(f"足部 link 数：{foot_z.shape[2]}\n")
 
     rows = []
     for i in range(N):
@@ -82,14 +82,14 @@ def main() -> int:
             thr = 20.0
             stance = fz > thr
         else:
-            z = foot[:, i, :, 2]
+            z = foot_z[:, i, :]
             stance = z < (np.percentile(z, 40) + 0.02)
 
         # 两只脚合并统计（任一只在地 = 有支撑）
         per_foot = []
-        for k in range(foot.shape[2]):
+        for k in range(foot_z.shape[2]):
             cnt, duty, contact, swings = detect_strides(stance[:, k], dt)
-            z = foot[:, i, k, 2]
+            z = foot_z[:, i, k]
             if cnt >= 2:
                 # 抬升 = swing 段最大高度 - stance 段最小高度
                 swing_mask = ~stance[:, k]

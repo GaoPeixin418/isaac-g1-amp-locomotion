@@ -70,11 +70,15 @@ def main(env_cfg, agent_cfg):
     env_cfg.scene.num_envs = n
     env_cfg.seed = 42
 
-    # 关掉定时推机器人：要的是干净的步态，不是鲁棒性测试
+    # 关掉定时推机器人：要的是干净的步态，不是鲁棒性测试。
+    # 注意不是改 interval_range_s —— 那个 param 不被这种 term 接受。
+    # 正确做法是把推力幅值设为 0，等价于不推。
     if args_cli.no_push:
         try:
-            env_cfg.events.push_robot.params["interval_range_s"] = (1e6, 1e6)
-            print("[INFO] push_robot 已关闭")
+            env_cfg.events.push_robot.params["velocity_range"] = {
+                "x": (0.0, 0.0), "y": (0.0, 0.0), "z": (0.0, 0.0)
+            }
+            print("[INFO] push_robot 推力已置零")
         except Exception as exc:
             print(f"[WARN] 关 push_robot 失败({exc})，数据会带扰动噪声")
 
@@ -107,17 +111,26 @@ def main(env_cfg, agent_cfg):
     foot_ids = [i for i, nm in enumerate(body_names) if "ankle_roll" in nm]
     print(f"[INFO] foot bodies: {[body_names[i] for i in foot_ids]}")
 
+    # Isaac Lab 2.3 的 ArticulationData 没有 body_pos_b（只有世界坐标）。
+    # 但足端"高度"就是世界 z，不受偏航角影响，所以直接用世界坐标的 z 分量。
+    if not hasattr(robot.data, "body_pos_w"):
+        print("[DEBUG] body attrs:", [a for a in dir(robot.data) if "body" in a or "_pos_" in a])
+        raise SystemExit(1)
+
     has_contact = "contact_forces" in base_env.scene.sensors or (
         "contact_forces" in getattr(base_env.scene, "_sensors", {})
     )
     print(f"[INFO] contact sensor available: {has_contact}")
 
-    # 机器人总质量（用于 CoT）
+    # 机器人总质量（用于 CoT）。
+    # 注意 get_masses() 返回 (N, num_links)，必须只取一个 env 再求和，
+    # 否则会把 6 个环境的质量一起加起来（曾算出 206kg 的荒谬值）。
     try:
-        mass = float(robot.root_physx_view.get_masses().sum())
-    except Exception:
+        mass = float(robot.root_physx_view.get_masses()[0].sum())
+    except Exception as exc:
+        print(f"[WARN] 取质量失败({exc})，回退到 35kg")
         mass = 35.0
-    print(f"[INFO] robot mass = {mass:.2f} kg, dt = {dt}")
+    print(f"[INFO] robot mass = {mass:.2f} kg, dt = {dt}, num_links = {len(body_names)}")
 
     # ---- 每步把速度指令钉死 -----------------------------------------------
     vel_tensor = torch.tensor(vel_list, device=base_env.device, dtype=torch.float32)
@@ -134,7 +147,7 @@ def main(env_cfg, agent_cfg):
     obs = env.get_observations()
     pin_command()
 
-    records = {"lin_vel_x": [], "lin_vel_y": [], "foot_pos_b": [], "torque": [],
+    records = {"lin_vel_x": [], "lin_vel_y": [], "foot_z": [], "torque": [],
                "joint_vel": [], "cmd_x": []}
     if has_contact:
         records["foot_force_z"] = []
@@ -148,8 +161,8 @@ def main(env_cfg, agent_cfg):
 
             records["lin_vel_x"].append(robot.data.root_lin_vel_b[:, 0].cpu().numpy())
             records["lin_vel_y"].append(robot.data.root_lin_vel_b[:, 1].cpu().numpy())
-            records["foot_pos_b"].append(
-                robot.data.body_pos_b[:, foot_ids, :].cpu().numpy().astype(np.float32)
+            records["foot_z"].append(
+                robot.data.body_pos_w[:, foot_ids, 2].cpu().numpy().astype(np.float32)
             )
             records["torque"].append(robot.data.applied_torque.cpu().numpy().astype(np.float32))
             records["joint_vel"].append(robot.data.joint_vel.cpu().numpy().astype(np.float32))
