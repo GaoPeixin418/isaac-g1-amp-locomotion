@@ -76,24 +76,24 @@ def main() -> int:
         vx = data["lin_vel_x"][:, i]
         vy = data["lin_vel_y"][:, i]
 
-        # --- 接触判定：优先用接触力，退化到足部高度 ---
-        if has_force:
-            fz = np.abs(data["foot_force_z"][:, i])          # (T, 2)
-            thr = 20.0
-            stance = fz > thr
-        else:
-            z = foot_z[:, i, :]
-            stance = z < (np.percentile(z, 40) + 0.02)
+        # --- 接触判定 ---
+        # 优先用足端高度（采集最稳），而不是接触力。
+        # 原因：ContactSensor 的 net_forces_w 只有被配置的 body（本例 2 个），
+        #       用 robot 全局 body index 去索引会错位，实测采出来全 0。
+        # 判定：脚贴近地面最低值 = stance，抬起来 = swing。
+        # 阈值自适应 —— 取每条序列的 15% 分位 + 3cm 余量。
+        z = foot_z[:, i, :]                      # (T, 2)
+        thr = np.percentile(z, 15, axis=0) + 0.03
+        stance = z < thr                         # True = 踩在地上
 
-        # 两只脚合并统计（任一只在地 = 有支撑）
         per_foot = []
         for k in range(foot_z.shape[2]):
             cnt, duty, contact, swings = detect_strides(stance[:, k], dt)
-            z = foot_z[:, i, k]
+            zk = z[:, k]
             if cnt >= 2:
                 # 抬升 = swing 段最大高度 - stance 段最小高度
                 swing_mask = ~stance[:, k]
-                clearance = float(z[swing_mask].max() - z[stance[:, k]].min()) \
+                clearance = float(zk[swing_mask].max() - zk[stance[:, k]].min()) \
                     if swing_mask.any() and stance[:, k].any() else float("nan")
                 per_foot.append((cnt / (T * dt), duty, clearance))
         if not per_foot:
