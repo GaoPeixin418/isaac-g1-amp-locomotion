@@ -28,11 +28,15 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from analyze_gait import detect_strides  # noqa: E402
 
 WARMUP_SEC = 5.0
+# 启动暂态额外观察窗：实测 2.5 m/s 档前 6 秒几乎不动（分段均速 0.14），
+# 之后稳定在 2.1-2.4。只用 5s warmup 会把这一档的误差算成 0.8，
+# 掩盖"稳态其实是跟得上"的事实。所以额外报一列 10s 之后的稳态误差。
+WARMUP_SS_SEC = 10.0
 
 # 人类典型支撑占比（量级参照带，非精确引用）
 HUMAN_DUTY = {0.5: 0.68, 1.0: 0.62, 1.5: 0.55, 2.0: 0.46, 2.5: 0.36, 3.0: 0.31}
 
-METRICS = ["duty_factor", "stride_freq", "stride_len", "foot_clear", "vel_err", "cot"]
+METRICS = ["duty_factor", "stride_freq", "stride_len", "foot_clear", "vel_err", "vel_err_ss", "cot"]
 
 
 def compute(npz_path: Path):
@@ -42,6 +46,7 @@ def compute(npz_path: Path):
     vels = np.asarray(d["velocities"], dtype=float)
     T = d["lin_vel_x"].shape[0]
     W = int(WARMUP_SEC / dt)
+    Wss = int(WARMUP_SS_SEC / dt)
     foot_z = d["foot_z"]
 
     rows = []
@@ -64,8 +69,12 @@ def compute(npz_path: Path):
                     if sw.any() and stance[:, k].any() else float("nan")
                 per_foot.append((cnt / (T * dt), duty, clearance))
 
+        vx_ss = d["lin_vel_x"][Wss:, i] if Wss < T else vx
+        vel_err_ss = float(np.abs(vx_ss - cmd).mean())
+
         if not per_foot:
-            rows.append(dict(cmd=cmd, **{m: float("nan") for m in METRICS}))
+            rows.append(dict(cmd=cmd, vel_err_ss=vel_err_ss,
+                             **{m: float("nan") for m in METRICS if m != "vel_err_ss"}))
             continue
 
         freq = float(np.mean([p[0] for p in per_foot]))
@@ -82,7 +91,8 @@ def compute(npz_path: Path):
 
         rows.append(dict(cmd=cmd, duty_factor=duty, stride_freq=freq,
                          stride_len=stride_len, foot_clear=clear,
-                         vel_err=vel_err, cot=cot, lateral_drift=drift))
+                         vel_err=vel_err, vel_err_ss=vel_err_ss, cot=cot,
+                         lateral_drift=drift))
     return rows
 
 
@@ -134,11 +144,12 @@ def main() -> int:
     # ---------- 1. 逐模型明细 ----------
     for lab, rows in data.items():
         print(f"\n### {lab}")
-        print("| 指令速度 (m/s) | 支撑占比 | 步频 (1/s) | 步长 (m) | 抬升 (m) | 速度误差 (m/s) | CoT |")
-        print("|" + "|".join(["---"] * 7) + "|")
+        print("| 指令速度 (m/s) | 支撑占比 | 步频 (1/s) | 步长 (m) | 抬升 (m) | 速度误差 | 稳态误差 | CoT |")
+        print("|" + "|".join(["---"] * 8) + "|")
         for r in rows:
             print(f"| {r['cmd']:.1f} | {fmt(r['duty_factor'])} | {fmt(r['stride_freq'],2)} | "
-                  f"{fmt(r['stride_len'],2)} | {fmt(r['foot_clear'])} | {fmt(r['vel_err'])} | {fmt(r['cot'],2)} |")
+                  f"{fmt(r['stride_len'],2)} | {fmt(r['foot_clear'])} | {fmt(r['vel_err'])} | "
+                  f"{fmt(r['vel_err_ss'])} | {fmt(r['cot'],2)} |")
 
     # ---------- 2. 支撑占比 vs 速度（核心对比） ----------
     speeds = sorted({r["cmd"] for rows in data.values() for r in rows})
@@ -156,16 +167,17 @@ def main() -> int:
 
     # ---------- 3. 单调性 / 误差汇总 ----------
     print("\n### 汇总判据")
-    print("| 模型 | 支撑占比秩相关(应≈-1) | 平均速度误差 | 平均 CoT | 与人类参照带平均偏差 |")
-    print("|" + "|".join(["---"] * 5) + "|")
+    print("| 模型 | 支撑占比秩相关(应≈-1) | 平均速度误差 | 稳态速度误差(去10s) | 平均 CoT | 与人类参照带平均偏差 |")
+    print("|" + "|".join(["---"] * 6) + "|")
     for lab, rows in data.items():
         sp = [r["cmd"] for r in rows]
         rho = spearman(sp, [r["duty_factor"] for r in rows])
         ve = np.nanmean([r["vel_err"] for r in rows])
+        vess = np.nanmean([r["vel_err_ss"] for r in rows])
         cot = np.nanmean([r["cot"] for r in rows])
         dev = np.nanmean([abs(r["duty_factor"] - HUMAN_DUTY.get(round(r["cmd"], 1), np.nan))
                           for r in rows])
-        print(f"| {lab} | {fmt(rho,2)} | {fmt(ve)} | {fmt(cot,2)} | {fmt(dev)} |")
+        print(f"| {lab} | {fmt(rho,2)} | {fmt(ve)} | {fmt(vess)} | {fmt(cot,2)} | {fmt(dev)} |")
 
     # ---------- 4. 落 CSV ----------
     out = Path("backup/eval_out/compare_gait.csv")
