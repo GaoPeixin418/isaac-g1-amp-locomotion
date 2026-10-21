@@ -109,8 +109,9 @@ def main(env_cfg, agent_cfg):
     records = {
         "lin_vel_x": [], "lin_vel_y": [], "foot_z": [],
         "torque": [], "joint_vel": [],
-        "cmd_x": [],        # 这里存的是参考速度
-        "joint_err": [], "root_pos_err": [], "ref_vel_x": [],
+        "cmd_x": [],        # 这里存的是参考速度（见下：用速率而非 x 分量）
+        "joint_err": [], "root_pos_err": [], "ref_vel_x": [], "ref_vel_y": [],
+        "ref_speed": [],
     }
 
     t0 = time.time()
@@ -142,8 +143,17 @@ def main(env_cfg, agent_cfg):
             records["joint_err"].append(
                 (robot.data.joint_pos - ref_dof).abs().mean(dim=-1).cpu().numpy()
             )
+            # 速度标签为什么用"速率"而不是 x 分量：
+            #   30 段 clip 里混了转弯/侧步/倒退，根速度朝向各不相同，
+            #   实测 x 分量均值是 **-0.249**（负数）。按 x 分量的话，
+            #   "倒退" 和 "前进" 会互相抵消，"侧步" 会记成 0 速。
+            #   而我们关心的是"此刻应该有多快"，与方向无关，所以用水平速率。
+            vxy = ref_root_vel[:, :2]
+            ref_speed = vxy.norm(dim=-1)
             records["ref_vel_x"].append(ref_root_vel[:, 0].cpu().numpy())
-            records["cmd_x"].append(ref_root_vel[:, 0].cpu().numpy())
+            records["ref_vel_y"].append(ref_root_vel[:, 1].cpu().numpy())
+            records["ref_speed"].append(ref_speed.cpu().numpy())
+            records["cmd_x"].append(ref_speed.cpu().numpy())
 
         if step % 300 == 0:
             print(f"  step {step}/{args_cli.steps}  ({time.time()-t0:.0f}s)")
@@ -151,14 +161,14 @@ def main(env_cfg, agent_cfg):
     print(f"[INFO] rollout done in {time.time()-t0:.0f}s")
 
     arr = {k: np.stack(v, axis=0) for k, v in records.items()}
-    mean_ref = np.nanmean(arr["ref_vel_x"])
+    mean_ref = float(np.nanmean(arr["ref_speed"]))
     npz = os.path.join(args_cli.out, f"gait_{args_cli.tag}.npz")
     np.savez_compressed(
         npz, dt=dt, mass=mass,
         velocities=np.full(args_cli.num_envs, mean_ref, dtype=np.float32),
         **arr,
     )
-    print(f"[INFO] 平均参考速度 = {mean_ref:.3f} m/s")
+    print(f"[INFO] 平均参考速率 = {mean_ref:.3f} m/s（水平速率，非 x 分量）")
     print(f"[INFO] saved raw data -> {npz}")
     print("=== EVAL DEEPMIMIC DONE ===")
 

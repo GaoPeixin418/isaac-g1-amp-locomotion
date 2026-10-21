@@ -58,7 +58,7 @@ def windowed_samples(npz_path: Path):
             seg_z = foot_z[s:s + W, i, :]
             stance = seg_z < thr
 
-            ref_v = float(d["ref_vel_x"][s:s + W, i].mean())
+            ref_v = float(d["ref_speed"][s:s + W, i].mean())
             vx = d["lin_vel_x"][s:s + W, i]
             vy = d["lin_vel_y"][s:s + W, i]
 
