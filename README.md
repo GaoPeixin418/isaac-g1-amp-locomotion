@@ -100,50 +100,17 @@ g1-amp-locomotion/
 
 ### 演示视频
 
-| 文件 | 内容 |
+在 GitHub 上点链接即可用页面自带播放器查看（仓库内 mp4 支持在线播放）：
+
+| 视频 | 内容 |
 |---|---|
-| `amp_model_4000.mp4` | **终版**：λ=0.5，6 速度档并排 |
-| `amp_4000_single.mp4` | 终版单机视角 |
-| `amp_model_2000.mp4` | checkpoint 对照（跟踪最好、拟人最差） |
-| `ppo_baseline.mp4` / `ppo_baseline_single.mp4` | λ=1.0 纯 PPO：**小碎步 + 高速崩溃** |
-| `style_only_lerp0.mp4` | λ=0 纯风格：**风格分 0.98，原地摆姿势** |
-| `deepmimic_debug.mp4` | DeepMimic：**形状对、位置慢慢掉队** |
-
-<details open>
-<summary><b>▶ 直接播放（终版 λ=0.5）</b></summary>
-
-<video src="backup/videos/amp_model_4000.mp4" controls muted loop width="720"></video>
-
-[播放器未显示？点这里在 GitHub 文件页播放 →](backup/videos/amp_model_4000.mp4)
-
-</details>
-
-<details>
-<summary><b>▶ 对照：λ=1.0 纯 PPO（小碎步 + 高速崩溃）</b></summary>
-
-<video src="backup/videos/ppo_baseline.mp4" controls muted loop width="720"></video>
-
-[播放器未显示？点这里在 GitHub 文件页播放 →](backup/videos/ppo_baseline.mp4)
-
-</details>
-
-<details>
-<summary><b>▶ 对照：λ=0 纯风格（风格分 0.98，原地摆姿势）</b></summary>
-
-<video src="backup/videos/style_only_lerp0.mp4" controls muted loop width="720"></video>
-
-[播放器未显示？点这里在 GitHub 文件页播放 →](backup/videos/style_only_lerp0.mp4)
-
-</details>
-
-<details>
-<summary><b>▶ 对照：DeepMimic（形状对、位置慢慢掉队）</b></summary>
-
-<video src="backup/videos/deepmimic_debug.mp4" controls muted loop width="720"></video>
-
-[播放器未显示？点这里在 GitHub 文件页播放 →](backup/videos/deepmimic_debug.mp4)
-
-</details>
+| [**▶ 终版 λ=0.5（最终交付）**](backup/videos/amp_model_4000.mp4) | 6 个速度档并排，0.5 → 3.0 m/s |
+| [**▶ 终版单机视角**](backup/videos/amp_4000_single.mp4) | 单个机器人，便于看步态细节 |
+| [**▶ λ=1.0 纯 PPO 对照**](backup/videos/ppo_baseline.mp4) | 高频小碎步，2.0 m/s 以上崩溃 |
+| [**▶ λ=0 纯风格对照**](backup/videos/style_only_lerp0.mp4) | 判别器给 0.98 分，但原地摆姿势 |
+| [**▶ DeepMimic 对照**](backup/videos/deepmimic_debug.mp4) | 形状对，位置慢慢掉队 |
+| [checkpoint 对照 amp_model_2000](backup/videos/amp_model_2000.mp4) | 跟踪最好、拟人最差 |
+| [PPO 单机视角](backup/videos/ppo_baseline_single.mp4) | 便于看清小碎步 |
 
 ## 7. 文档索引
 
