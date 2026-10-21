@@ -1,38 +1,64 @@
 # G1 + AMP 拟人态走跑
 
 > 用 Adversarial Motion Priors (AMP) 在宇树 G1 上做拟人态走/跑控制，参考动作用 LAFAN1 数据集。
-> Is**纯仿真项目**（Isaac Sim + Isaac Lab），**未做 sim2real 部署**，任何对外表述都不声称真机验证。
+> **纯仿真项目**（Isaac Sim + Isaac Lab），**未做 sim2real 部署**，任何对外表述都不声称真机验证。
+> 全部结论来自 6 个速度档的确定性 rollout，数据与分析脚本都在仓库里，可复现。
 
-## 1. 为什么做这个
+## 1. 一句话结论
+
+在 Unitree G1 上，只有把风格奖励与任务奖励按 **λ=0.5** 绑定，才能同时拿到
+"像人""能听指令""省电"三件事。三个极端对照各缺一块，且每种缺失都能落到机制上解释：
+
+| 配置 | 步态形状 | 能听指令吗 | 能耗 CoT | 一句话 |
+|---|---|---|---|---|
+| λ=1.0 纯 PPO | ❌ 高频小碎步，duty 秩相关 **+0.60** | ✅ 低速准，**2.0 m/s 以上崩溃** | ❌ **2.75** | 能走，但不像人、且费劲 |
+| λ=0 纯风格 | ❌ duty 0.9，脚不离地 | ❌ 30 s 只挪 0.1–0.2 m | 1.20 | 像人，但**根本不走** |
+| DeepMimic | ✅ **−1.00**（比 AMP 还单调） | ⚠️ 只达参考速度 **48%–77%** | ⚠️ 2.86（低速） | **形状对，但没走到** |
+| **λ=0.5 AMP** | ✅ **−0.94** | ✅ 全程 0.5–3.0 m/s | ✅ **0.62** | 三项都占 |
+
+最终交付模型：**amp_4000**（checkpoint 阶梯 1000/2000/3000/4000/4999 选出）。
+
+---
+
+## 2. 为什么做这个
 
 面试双足机器人运动控制岗时，面试官看了我基于 PPO 的人形机器人行走 demo，评价是"有点丑"。
 根因：纯 PPO 从零探索出的步态只有"能走"，没有人类的步态风格（步频、摆臂、重心起伏、足部轨迹）。
+
+我把"丑"翻译成了可测的数字 —— PPO 是 **1.5–2.1 Hz 步频 + 0.27–0.74 m 步长**，
+人类同速度下是 0.85–1.0 Hz + 0.6–1.5 m，即**步频 2.2 倍、步长 48%**，能耗还是 AMP 的 4.4 倍。
 
 AMP 的做法：不逐帧跟踪参考动作，而是训练一个 **discriminator** 去区分"生成的动作片段"和"参考动捕片段"，
 把它的判别输出作为**风格奖励**叠加到任务奖励上。好处是不需要 phase 变量、不需要严格对齐时间轴，
 还能保留按速度指令自由切换走/跑的能力。
 
-## 2. 技术选型
+```python
+# 源码 rsl_rl/modules/amp.py:203
+return λ * task_reward + (1 - λ) * style_reward   # λ 是「任务」权重，不是风格权重
+```
+
+## 3. 技术选型
 
 | 项 | 选择 | 理由 |
 |---|---|---|
-| 机器人 | Unitree G1（29 DOF） | 开源 retarget 数据、USD 模型、AMP 实现最全；H2 生态不成熟 |
-| 算法 | AMP（PPO + discriminator 风格奖励） | 面试官点名；且支持 velocity command 走跑切换 |
-| 参考数据 | LAFAN1（宇树官方已 retarget 到 G1 的 CSV） | 跳过"人形动捕→G1 骨架"这个最耗时环节 |
-| 框架 | `legged_lab`（主线）+ `humanoid_amp`（保底） | legged_lab 的 AMP 带速度指令；humanoid_amp 是纯风格模仿 |
-| 仿真 | Isaac Sim 5.1.0 + Isaac Lab 2.3.2 | legged_lab v2.3.x 的硬要求；Sim 5.x 必须 Python 3.11 |
+| 机器人 | Unitree G1（29 DOF） | 宇树官方已把 LAFAN1 retarget 到 G1 骨架，跳过最耗时的 retarget 环节 |
+| 算法 | AMP（PPO + discriminator 风格奖励） | 支持 velocity command，可做走→跑连续切换 |
+| 参考数据 | LAFAN1（30 段 walk_and_run，总时长 156 s，含走跑过渡） | 官方 retarget 版，含过渡段才能训出连续步态族 |
+| 对照方法 | DeepMimic（逐帧跟踪） | 用来回答"为什么是 AMP 而不是另一条路" |
+| 框架 | `legged_lab` + `rsl_rl`（AMP fork） | AMP 任务带速度指令；DeepMimic 任务是框架原生 |
+| 仿真 | Isaac Sim 5.1.0 + Isaac Lab 2.3.2 | legged_lab 的硬要求；Sim 5.x 必须 Python 3.11 |
 
-## 3. 环境（云端服务器）
+## 4. 环境（云端服务器）
 
 | 项 | 值 |
 |---|---|
-| 机器 | 9gpu 租用实例，RTX 3090 24GB / Xeon 8350C 12 核 / 32GB 内存 |
+| 机器 | 9gpu 租用实例，RTX 3090 24GB → 后期换 **RTX 4090**；Xeon 8350C 12 核 / 32GB 内存 |
 | 系统 | Ubuntu 22.04.4 |
 | 磁盘 | 系统盘 59G（紧张）+ **数据盘 200G → `/data`（所有环境都装这）** |
-| conda env | `/data/envs/isaaclab`（Python 3.11.17） |
+| conda env | `/data/envs/isaaclab`（Python 3.11.17，torch 2.7+cu128） |
 | 网络 | GitHub / GitHub LFS / HuggingFace / pypi.nvidia.com 实测全通 |
 
-## 4. 快速复现
+## 5. 快速复现
 
 ```bash
 # 1) 环境（约 60-90 min，后台跑）
@@ -44,34 +70,72 @@ bash setup/02_install_legged_lab.sh
 # 3) 参考动作体检（关节限位/骨盆高度/速度区间/突变帧）
 python scripts/verify_motion.py --dir ./motions/lafan1
 
-# 4) 训练 AMP 行走
-python scripts/rsl_rl/train.py --task LeggedLab-Isaac-AMP-Flat-G1-v0 --headless --num_envs 4096
+# 4) 训练 AMP（4096 envs × 5000 iter，约 2.9 s/iter）
+python scripts/rsl_rl/train.py --task LeggedLab-Isaac-AMP-G1-v0 --headless --num_envs 4096
 
-# 5) 评估 + 录视频
-python scripts/rsl_rl/play.py --task LeggedLab-Isaac-AMP-Flat-G1-Play-v0 \
-    --headless --num_envs 64 --video --checkpoint <path>
+# 5) 6 速度档评估（三模型并排）
+bash setup/11_run_all_evals.sh
+
+# 6) 录终版视频
+bash setup/14_single_video.sh
 ```
 
-## 5. 目录结构
+对照实验脚本：`setup/13_finish_ppo.sh`（λ=1.0 PPO 基线）、
+`setup/16_train_deepmimic.sh` + `setup/18_eval_dm.sh`（DeepMimic 同源对照）。
+
+## 6. 目录结构
 
 ```
 g1-amp-locomotion/
-├── setup/      安装脚本（01 环境 / 02 legged_lab / 03 humanoid_amp 保底）
-├── data/       数据集下载
-├── scripts/    远程操作(remote.py)、数据体检、进度监控、备份
-├── config/     训练配置（环境就绪后落成文件并纳入 git）
-├── docs/       进度看板、开发日志、踩坑记录
-├── backup/     从服务器拉回的资料（日志/脚本/配置）
-└── report/     一页技术报告 + 面试问答准备
+├── setup/          服务器安装与训练/评估/录像脚本（01–19）
+├── scripts/        远程操作、数据体检、进度监控、步态量化分析（本地纯 numpy，不需 Isaac Sim）
+├── docs/           全部过程文档（11 份）+ 一页技术报告 + 面试 Q&A
+├── data/           数据集下载脚本
+├── backup/
+│   ├── videos/     7 段演示视频（已入库）
+│   ├── eval_out/   9 份 npz + 4 份 csv（全部量化原始数据，已入库）
+│   └── server/     服务器快照（体积大，.gitignore 排除）
+└── tmp/            临时命令输出（.gitignore 排除）
 ```
 
-## 6. 文档索引
+### 演示视频
 
-- `docs/PROGRESS.md` —— 进度看板（当前阶段 / 阻塞 / 下一步）
-- `docs/开发日志.md` —— 按时间追加的开发记录与踩坑（现象→排查→真凶→规律）
+| 文件 | 内容 |
+|---|---|
+| `amp_model_4000.mp4` | **终版**：λ=0.5，6 速度档并排 |
+| `amp_4000_single.mp4` | 终版单机视角 |
+| `amp_model_2000.mp4` | checkpoint 对照（跟踪最好、拟人最差） |
+| `ppo_baseline.mp4` / `ppo_baseline_single.mp4` | λ=1.0 纯 PPO：**小碎步 + 高速崩溃** |
+| `style_only_lerp0.mp4` | λ=0 纯风格：**风格分 0.98，原地摆姿势** |
+| `deepmimic_debug.mp4` | DeepMimic：**形状对、位置慢慢掉队** |
 
-## 7. 诚实红线
+## 7. 文档索引
 
-- 只做仿真，不声称 sim2real
-- 量化指标必须来自实测（步频/步长/关节 RMSE/CoT），不编造
-- 未跑完的实验在报告里标"未验证"，不写成已完成
+**对外交付（先看这两份）**
+- `docs/技术报告_一页版.md` —— 一页讲完：方法、实验、结果、选型、边界
+- `docs/面试Q&A.md` —— 20+ 道题的回答要点与追问预案，含 30/60 秒讲稿
+
+**实验与推导**
+- `docs/步态量化对比与模型选型.md` —— 五档 checkpoint 阶梯、三条趋势线、选型论证
+- `docs/AMP_vs_PPO对照实验.md` —— λ 三档消融，回答"AMP 比 PPO 好在哪"
+- `docs/AMP_vs_DeepMimic对照实验.md` —— 同源对照 + 源码级论证，"形状对但没走到"
+- `docs/训练曲线分析.md` —— 训练过程的判读与一次结论更正
+- `docs/量化评估结果.md` —— 早期评估结果
+
+**过程记录**
+- `docs/PROGRESS.md` —— 进度看板
+- `docs/开发日志.md` —— 按时间追加的踩坑记录（现象→排查→真凶→规律）
+- `docs/决策清单与专业判断.md` —— 哪些是自己的判断、AI 帮做了什么
+- `docs/技术路线与AMP原理.md` —— 原理推导
+- `docs/今日工作报告_2026-10-19.md`、`docs/建仓库与Git备份.md`
+
+## 8. 诚实红线
+
+1. **只做仿真，不声称 sim2real**，不涉及任何真机验证。
+2. **AMP 核心代码不是我写的**：用的是 legged_lab + rsl_rl 的 AMP 实现，
+   判别器/AMP 缓冲/奖励混合一行未动。我做的是对齐实验条件、设计对照、
+   写量化评估脚本、对结果做机制归因。
+3. **数字是单点观测**：单次评估、无多 seed 重复，差异不显著时只说"综合最优"，不说"显著优于"。
+4. **训练步数不完全对等**（PPO 2500 / DeepMimic 3000 / AMP 4000–5000），主动承认，不做过度归因。
+5. **人类参照值是典型量级参照**，不是精确引用值；秩相关、速度误差、CoT 这三个不依赖外部文献。
+6. **保留错误与更正**：λ 语义写反、步长公式多乘 2，均在文档中保留原文 + 更正块，不偷偷改掉。
