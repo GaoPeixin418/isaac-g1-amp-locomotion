@@ -152,6 +152,29 @@ def main(env_cfg, agent_cfg):
         except Exception:
             pass
 
+    # ---- 关掉指令重采样与 standing env -------------------------------------
+    # 踩过的坑（2026-10-21 23:25 发现）：
+    # 训练配置 commands.base_velocity 里
+    #   resampling_time_range = [10.0, 10.0]
+    #   rel_standing_envs     = 0.02
+    # 意味着每 10 秒会把指令重采样一次，且有 2% 的 env 会被强制设为零指令（站立）。
+    # 6 个 env × 2% ≈ 1 个 env 会被选中 —— 实测 2.5 m/s 那一路被选中，
+    # 前 10 秒 cmd 恒为 0，导致 vx≈0。
+    # 当时误判为"2.5 m/s 存在启动暂态（策略缺陷）"，实为评估脚本污染。
+    # 机器人静止是正确行为，被污染的其实是测量本身。
+    #
+    # 彻底修法：直接在 command term 上把这两个机制关掉，而不是靠 pin 抢顺序。
+    def disable_command_sampling():
+        try:
+            term = base_env.command_manager.get_term("base_velocity")
+            term.cfg.resampling_time_range = (1e9, 1e9)
+            term.cfg.rel_standing_envs = 0.0
+            print("[INFO] 已关闭 base_velocity 重采样与 standing env")
+        except Exception as exc:
+            print(f"[WARN] 关闭指令重采样失败({exc})，将仅依赖每步 pin")
+
+    disable_command_sampling()
+
     obs = env.get_observations()
     pin_command()
 
@@ -162,6 +185,9 @@ def main(env_cfg, agent_cfg):
 
     t0 = time.time()
     for step in range(args_cli.steps):
+        # pin 必须在 step 之前：观测是在 env.step() 内部读 command 生成的，
+        # 放在 step 之后则策略当步看到的是被 resample 覆写过的指令。
+        pin_command()
         with torch.inference_mode():
             actions = policy(obs)
             obs, _, dones, _ = env.step(actions)
@@ -186,13 +212,34 @@ def main(env_cfg, agent_cfg):
             except Exception:
                 records["cmd_x"].append(np.full(n, np.nan, dtype=np.float32))
 
-        pin_command()
         if step % 300 == 0:
             print(f"  step {step}/{args_cli.steps}  ({time.time()-t0:.0f}s)")
 
     print(f"[INFO] rollout done in {time.time()-t0:.0f}s")
 
     arr = {k: np.stack(v, axis=0) for k, v in records.items()}  # (T, N, ...)
+
+    # ---- 指令纯净度自检 ---------------------------------------------------
+    # 踩过坑才加的：现在就把污染的 env 点出来，而不是等到分析阶段才发现。
+    # 判据：cmd_x 的均值偏离目标 > 0.02，或时间标准差 > 0.05（应为恒定量）。
+    _cmd = arr["cmd_x"]
+    _bad = []
+    for i, v in enumerate(vel_list):
+        _c = _cmd[:, i]
+        _dev = float(abs(_c.mean() - v))
+        _sd = float(_c.std())
+        if _dev > 0.02 or _sd > 0.05:
+            _bad.append(i)
+            print(f"[ERROR] env#{i} 指令被污染：目标={v:.2f} "
+                  f"实测 mean={_c.mean():.3f} std={_sd:.3f}")
+            _seg = [f"{_c[int(k * 0.5 / dt):int((k + 1) * 0.5 / dt)].mean():.2f}"
+                    for k in range(0, min(12, int(_c.shape[0] * dt / 0.5)))]
+            print(f"        前 6 s 指令分段均值: {' '.join(_seg)}")
+    if _bad:
+        print("[ERROR] 以上 env 的数据不可用于速度相关指标，请修好后重采。")
+    else:
+        print(f"[INFO] 指令纯净度自检通过：{len(vel_list)} 个 env 全部恒定")
+
     tag = os.path.basename(resume_path).replace(".pt", "")
     npz = os.path.join(args_cli.out, f"gait_{tag}.npz")
     np.savez_compressed(npz, dt=dt, mass=mass, velocities=np.array(vel_list), **arr)
