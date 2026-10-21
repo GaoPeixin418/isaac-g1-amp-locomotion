@@ -115,8 +115,12 @@ def main() -> int:
 
         mean_v = float(vx.mean())
         dist = mean_v * Tw * dt
-        # 一个 stride = 左右脚各迈一步 = 2 步
-        stride_len = 2.0 * mean_v / freq if freq > 1e-6 else float("nan")
+        # 修正记录（2026-10-21）：这里原来写 2.0 * v / freq，是错的。
+        #   freq 是**单脚**每秒着地次数（detect_strides 按单只脚数），
+        #   而 gait cycle 周期 = 1/freq（一个 cycle 里左右脚各着地一次）。
+        #   所以一个 cycle 前进距离 = v / freq，不该再乘 2。
+        #   原公式把 3.0 m/s 的步长算成 4.52 m，物理上不可能（G1 腿长不到 1m）。
+        stride_len = mean_v / freq if freq > 1e-6 else float("nan")
 
         # 诊断：把有效时长切成 4 段看速度是否稳定（某个 env 可能中途摔倒/减速）
         seg = [float(s.mean()) for s in np.array_split(vx, 4)]

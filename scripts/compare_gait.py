@@ -82,7 +82,9 @@ def compute(npz_path: Path):
         clear = float(np.nanmean([p[2] for p in per_foot]))
         mean_v = float(vx.mean())
         dist = mean_v * Tw * dt
-        stride_len = 2.0 * mean_v / freq if freq > 1e-6 else float("nan")
+        # 步长：freq 是单脚步频 = gait cycle 频率，一个 cycle 前进 v/freq。
+        # 原来写 2.0 * v / freq 是错的（见 analyze_gait.py 里的修正记录）。
+        stride_len = mean_v / freq if freq > 1e-6 else float("nan")
         power = np.abs(d["torque"][W:, i, :] * d["joint_vel"][W:, i, :]).sum(axis=1)
         energy = float(power.sum() * dt)
         cot = energy / (mass * 9.81 * abs(dist)) if abs(dist) > 1e-3 else float("nan")

@@ -33,8 +33,11 @@ from analyze_gait import detect_strides  # noqa: E402
 WIN_SEC = 2.5
 HOP_SEC = 1.0
 WARMUP_SEC = 5.0
-BINS = [0.5, 1.0, 1.5, 2.0, 2.5, 3.0]
-BIN_TOL = 0.35
+# 用区间而不是名义中心：参考速度是连续分布的，名义 3.0 档实测只落到 1 个样本，
+# 报出来的数字没有意义。改成区间后，标签直接写区间内的**实测均值**。
+EDGES = [(0.2, 0.7), (0.7, 1.2), (1.2, 1.7), (1.7, 2.2), (2.2, 3.2)]
+# 低于 0.2 m/s 的窗口是站立/原地动作，没有步态可言，单独统计不进曲线。
+MIN_V = 0.2
 
 
 def windowed_samples(npz_path: Path):
@@ -58,9 +61,27 @@ def windowed_samples(npz_path: Path):
             seg_z = foot_z[s:s + W, i, :]
             stance = seg_z < thr
 
+            # 速度方向：参考动作朝向各异（转弯/侧步/倒退都在 30 段里），
+            # 所以"实际速度"不能直接取世界 x 分量 —— 那会把朝 -x 行进
+            # 记成负速度。改成**沿参考方向的投影**：这才是"跟没跟上"。
+            ref_vx = d["ref_vel_x"][s:s + W, i]
+            ref_vy = d["ref_vel_y"][s:s + W, i]
             ref_v = float(d["ref_speed"][s:s + W, i].mean())
             vx = d["lin_vel_x"][s:s + W, i]
             vy = d["lin_vel_y"][s:s + W, i]
+
+            # 单独处理零速段（站立/原地），此时方向无定义
+            sp = np.hypot(ref_vx, ref_vy)
+            m = sp > 0.2
+            if m.any():
+                ux = (ref_vx[m] / sp[m]).mean()
+                uy = (ref_vy[m] / sp[m]).mean()
+                nn = np.hypot(ux, uy) or 1.0
+                ux, uy = ux / nn, uy / nn
+            else:
+                ux, uy = 1.0, 0.0
+            act_along = float((vx * ux + vy * uy).mean())
+            drift_perp = float((vx * (-uy) + vy * ux).mean())
 
             per_foot = []
             for k in range(foot_z.shape[2]):
@@ -76,8 +97,8 @@ def windowed_samples(npz_path: Path):
                 v=ref_v,
                 duty=float(np.mean([p[1] for p in per_foot])) if per_foot else float("nan"),
                 freq=float(np.mean([p[0] for p in per_foot])) if per_foot else float("nan"),
-                act_v=float(vx.mean()),
-                drift=float(np.abs(vy).mean()),
+                act_v=act_along,
+                drift=abs(drift_perp),
                 energy=energy,
                 dist=dist,
                 joint_err=float(d["joint_err"][s:s + W, i].mean()),
@@ -92,41 +113,54 @@ def fmt(v, nd=3):
 
 def main() -> int:
     if len(sys.argv) < 2:
-        print("用法: python analyze_deepmimic.py <npz路径>")
+        print("用法: python analyze_deepmimic.py <npz路径> [输出txt]")
         return 1
+
+    # 输出一律走 say()：同时打到屏幕和写文件。
+    # 原因：PowerShell 的 Out-File -Encoding utf8 会把中文写坏（实测过），
+    # 而这份表格是要直接贴进文档的，编码错了就没法用。
+    buf: list[str] = []
+    out_txt = sys.argv[2] if len(sys.argv) > 2 else None
+
+    def say(s=""):
+        print(s)
+        buf.append(s)
 
     d, dt, mass, samples = windowed_samples(Path(sys.argv[1]))
     vs = np.array([s["v"] for s in samples])
 
-    print(f"=== DeepMimic 步态分析（滑动窗口分箱） ===")
-    print(f"样本数 = {len(samples)}   dt = {dt}")
-    print(f"参考速度范围 = {vs.min():.2f} ~ {vs.max():.2f} m/s  "
-          f"（均值 {vs.mean():.2f}）")
-    print("分位: " + " ".join(f"{q}%={np.percentile(vs, q):.2f}" for q in (5, 25, 50, 75, 95)))
+    say("=== DeepMimic 步态分析（滑动窗口分箱） ===")
+    say(f"样本数 = {len(samples)}   dt = {dt}")
+    say(f"参考速率范围 = {vs.min():.2f} ~ {vs.max():.2f} m/s  （均值 {vs.mean():.2f}）")
+    say("分位: " + " ".join(f"{q}%={np.percentile(vs, q):.2f}" for q in (5, 25, 50, 75, 95)))
+    say(f"（低于 {MIN_V} m/s 的窗口是站立/原地动作，不计入步态曲线）")
 
-    print("\n### 按瞬时参考速度分箱")
-    print("| 参考速度 (m/s) | 支撑占比 | 步频 (1/s) | 步长 (m) | CoT | 实际速度 | 侧向漂移 | 关节误差(°) | 根位置误差(m) | 样本数 |")
-    print("|" + "|".join(["---"] * 10) + "|")
+    say("\n### 按瞬时参考速率分箱")
+    say("| 参考速率 (m/s) | 支撑占比 | 步频 (1/s) | 步长 (m) | CoT | 沿方向实际速度 | 侧向漂移 | 关节误差(°) | 根位置误差(m) | 样本数 |")
+    say("|" + "|".join(["---"] * 10) + "|")
 
     rows = []
-    for b in BINS:
-        sel = [s for s in samples if abs(s["v"] - b) <= BIN_TOL]
+    for lo, hi in EDGES:
+        sel = [s for s in samples if lo <= s["v"] < hi]
         if not sel:
-            print(f"| {b:.1f} | - | - | - | - | - | - | - | - | 0 |")
+            say(f"| {lo:.1f}-{hi:.1f} | - | - | - | - | - | - | - | - | 0 |")
             continue
+        b = float(np.mean([s["v"] for s in sel]))     # 标签用实测均值
         duty = np.nanmean([s["duty"] for s in sel])
         freq = np.nanmean([s["freq"] for s in sel])
         act_v = np.mean([s["act_v"] for s in sel])
         drift = np.mean([s["drift"] for s in sel])
         je = np.mean([s["joint_err"] for s in sel])
         re_ = np.mean([s["root_err"] for s in sel])
-        # CoT：先把每窗口的 e/(mgd) 算好再平均，避免小位移窗口把均值拉爆
-        cots = [s["energy"] / (mass * 9.81 * abs(s["dist"]))
-                for s in sel if abs(s["dist"]) > 0.05]
+        # CoT：先把每窗口的 e/(mgd) 算好再平均，避免小位移窗口把均值拉爆。
+        # 位移也用沿参考方向的投影，否则倒着走会记成负距离。
+        cots = [s["energy"] / (mass * 9.81 * abs(s["act_v"]) * WIN_SEC)
+                for s in sel if abs(s["act_v"]) > 0.05]
         cot = float(np.mean(cots)) if cots else float("nan")
-        stride_len = 2.0 * act_v / freq if freq and not np.isnan(freq) and freq > 1e-6 else float("nan")
-        print(f"| {b:.1f} | {fmt(duty)} | {fmt(freq,2)} | {fmt(stride_len,2)} | {fmt(cot,2)} | "
-              f"{fmt(act_v)} | {fmt(drift)} | {fmt(np.degrees(je),2)} | {fmt(re_)} | {len(sel)} |")
+        # 步长同 AMP 侧口径：freq 是单脚步频 = cycle 频率，stride = v/freq
+        stride_len = abs(act_v) / freq if freq and not np.isnan(freq) and freq > 1e-6 else float("nan")
+        say(f"| {b:.2f} | {fmt(duty)} | {fmt(freq,2)} | {fmt(stride_len,2)} | {fmt(cot,2)} | "
+            f"{fmt(act_v)} | {fmt(drift)} | {fmt(np.degrees(je),2)} | {fmt(re_)} | {len(sel)} |")
         rows.append((b, duty))
 
     ok = [(b, du) for b, du in rows if not np.isnan(du)]
@@ -136,13 +170,16 @@ def main() -> int:
         rx = np.argsort(np.argsort(xs))
         ry = np.argsort(np.argsort(ys))
         rho = np.corrcoef(rx, ry)[0, 1]
-        print(f"\n支撑占比 vs 参考速度 秩相关 = {rho:.2f}（应≈-1 才说明存在走→跑过渡）")
+        say(f"\n支撑占比 vs 参考速率 秩相关 = {rho:.2f}（应≈-1 才说明存在走→跑过渡）")
 
     # DeepMimic 主场：它本来就是干这个的，这两个指标是它的定义性目标
     all_je = [s["joint_err"] for s in samples]
     all_re = [s["root_err"] for s in samples]
-    print(f"\n全程平均关节跟踪误差 = {np.degrees(np.mean(all_je)):.2f} °")
-    print(f"全程平均根位置跟踪误差 = {np.mean(all_re):.3f} m")
+    say(f"\n全程平均关节跟踪误差 = {np.degrees(np.mean(all_je)):.2f} °")
+    say(f"全程平均根位置跟踪误差 = {np.mean(all_re):.3f} m")
+
+    if out_txt:
+        Path(out_txt).write_text("\n".join(buf) + "\n", encoding="utf-8")
     return 0
 
 
