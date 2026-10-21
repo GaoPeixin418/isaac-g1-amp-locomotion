@@ -112,28 +112,36 @@ g1-amp-locomotion/
 <details open>
 <summary><b>▶ 直接播放（终版 λ=0.5）</b></summary>
 
-<video src="https://raw.githubusercontent.com/GaoPeixin418/isaac-g1-amp-locomotion/main/backup/videos/amp_model_4000.mp4" controls muted loop width="720"></video>
+<video src="backup/videos/amp_model_4000.mp4" controls muted loop width="720"></video>
+
+[播放器未显示？点这里在 GitHub 文件页播放 →](backup/videos/amp_model_4000.mp4)
 
 </details>
 
 <details>
 <summary><b>▶ 对照：λ=1.0 纯 PPO（小碎步 + 高速崩溃）</b></summary>
 
-<video src="https://raw.githubusercontent.com/GaoPeixin418/isaac-g1-amp-locomotion/main/backup/videos/ppo_baseline.mp4" controls muted loop width="720"></video>
+<video src="backup/videos/ppo_baseline.mp4" controls muted loop width="720"></video>
+
+[播放器未显示？点这里在 GitHub 文件页播放 →](backup/videos/ppo_baseline.mp4)
 
 </details>
 
 <details>
 <summary><b>▶ 对照：λ=0 纯风格（风格分 0.98，原地摆姿势）</b></summary>
 
-<video src="https://raw.githubusercontent.com/GaoPeixin418/isaac-g1-amp-locomotion/main/backup/videos/style_only_lerp0.mp4" controls muted loop width="720"></video>
+<video src="backup/videos/style_only_lerp0.mp4" controls muted loop width="720"></video>
+
+[播放器未显示？点这里在 GitHub 文件页播放 →](backup/videos/style_only_lerp0.mp4)
 
 </details>
 
 <details>
 <summary><b>▶ 对照：DeepMimic（形状对、位置慢慢掉队）</b></summary>
 
-<video src="https://raw.githubusercontent.com/GaoPeixin418/isaac-g1-amp-locomotion/main/backup/videos/deepmimic_debug.mp4" controls muted loop width="720"></video>
+<video src="backup/videos/deepmimic_debug.mp4" controls muted loop width="720"></video>
+
+[播放器未显示？点这里在 GitHub 文件页播放 →](backup/videos/deepmimic_debug.mp4)
 
 </details>
 
