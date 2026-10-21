@@ -52,6 +52,27 @@
 | 9 | 视频：amp_4000 / PPO 基线（4 envs） | 20 min | ✅ 完成（22:24，已拉回本地） |
 | 10 | 补充：单环境版本（成片主镜头） | 10 min | 🔄 录制中（22:30 启，约 22:42 完成） |
 
+## 🆕 第二个对照维度：AMP vs DeepMimic（2026-10-21 18:40 启动）
+
+用户提出"能不能再补一个 DeepMimic 对比实验"——第一个维度是"AMP vs PPO"（奖励里有没有风格），
+这个维度是"另一种模仿范式"，回答**为什么选 AMP 而不是 DeepMimic**。
+
+| # | 任务 | 机时 | 状态 |
+|---|---|---|---|
+| 0 | 源码调研：legged_lab 原生带 G1 DeepMimic | — | ✅ 零开发成本 |
+| 1 | 数据兼容性验证（pkl 字段是否够 DeepMimic 用） | 1 min | ✅ **通过**（root_pos/rot/key_body 全齐） |
+| 2 | patch 配置：数据指向 AMP 那 30 段 | — | ✅ 完成（带 .bak） |
+| 3 | 冒烟测试 64 envs × 50 iter | 2 min | ✅ 完成（reward 0.05→0.26） |
+| 4 | **正式训练 4096 envs × 3000 iter** | 2.0 h | 🔄 **训练中，ETA 约 20:45** |
+| 5 | DeepMimic 专用评估（自写脚本） | 3 min | ⏳ 待训练完成 |
+| 6 | Debug 模式对比视频（半透明参考机器人并排） | 10 min | ⏳ 待训练完成 |
+
+→ 完整论证见 [AMP_vs_DeepMimic对照实验.md](./AMP_vs_DeepMimic对照实验.md)（源码部分已完成）
+
+**已经拿到的源码级结论（不需要 GPU）**：DeepMimic 观测组**完全没有 command 接口**，
+它靠参考动作的时间轴推进，产出是"复现这条动作"而非"响应速度指令"——
+这是选 AMP 的结构性理由。
+
 **全部 4 段视频（4 envs 版本）已在本地 `backup/videos/`**：
 `amp_model_4000.mp4`（最终选型）、`amp_model_2000.mp4`（对照）、
 `ppo_baseline.mp4`（λ=1.0 小碎步）、`style_only_lerp0.mp4`（λ=0 原地摆姿势）。
