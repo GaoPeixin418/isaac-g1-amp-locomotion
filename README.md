@@ -109,25 +109,53 @@ g1-amp-locomotion/
 | `style_only_lerp0.mp4` | λ=0 纯风格：**风格分 0.98，原地摆姿势** |
 | `deepmimic_debug.mp4` | DeepMimic：**形状对、位置慢慢掉队** |
 
+<details open>
+<summary><b>▶ 直接播放（终版 λ=0.5）</b></summary>
+
+<video src="https://raw.githubusercontent.com/GaoPeixin418/isaac-g1-amp-locomotion/main/backup/videos/amp_model_4000.mp4" controls muted loop width="720"></video>
+
+</details>
+
+<details>
+<summary><b>▶ 对照：λ=1.0 纯 PPO（小碎步 + 高速崩溃）</b></summary>
+
+<video src="https://raw.githubusercontent.com/GaoPeixin418/isaac-g1-amp-locomotion/main/backup/videos/ppo_baseline.mp4" controls muted loop width="720"></video>
+
+</details>
+
+<details>
+<summary><b>▶ 对照：λ=0 纯风格（风格分 0.98，原地摆姿势）</b></summary>
+
+<video src="https://raw.githubusercontent.com/GaoPeixin418/isaac-g1-amp-locomotion/main/backup/videos/style_only_lerp0.mp4" controls muted loop width="720"></video>
+
+</details>
+
+<details>
+<summary><b>▶ 对照：DeepMimic（形状对、位置慢慢掉队）</b></summary>
+
+<video src="https://raw.githubusercontent.com/GaoPeixin418/isaac-g1-amp-locomotion/main/backup/videos/deepmimic_debug.mp4" controls muted loop width="720"></video>
+
+</details>
+
 ## 7. 文档索引
 
 **对外交付（先看这两份）**
-- `docs/技术报告_一页版.md` —— 一页讲完：方法、实验、结果、选型、边界
-- `docs/面试Q&A.md` —— 20+ 道题的回答要点与追问预案，含 30/60 秒讲稿
+- [`docs/技术报告_一页版.md`](docs/%E6%8A%80%E6%9C%AF%E6%8A%A5%E5%91%8A_%E4%B8%80%E9%A1%B5%E7%89%88.md) —— 一页讲完：方法、实验、结果、选型、边界
+- [`docs/面试Q&A.md`](docs/%E9%9D%A2%E8%AF%95Q%26A.md) —— 20+ 道题的回答要点与追问预案，含 30/60 秒讲稿
 
 **实验与推导**
-- `docs/步态量化对比与模型选型.md` —— 五档 checkpoint 阶梯、三条趋势线、选型论证
-- `docs/AMP_vs_PPO对照实验.md` —— λ 三档消融，回答"AMP 比 PPO 好在哪"
-- `docs/AMP_vs_DeepMimic对照实验.md` —— 同源对照 + 源码级论证，"形状对但没走到"
-- `docs/训练曲线分析.md` —— 训练过程的判读与一次结论更正
-- `docs/量化评估结果.md` —— 早期评估结果
+- [`docs/步态量化对比与模型选型.md`](docs/%E6%AD%A5%E6%80%81%E9%87%8F%E5%8C%96%E5%AF%B9%E6%AF%94%E4%B8%8E%E6%A8%A1%E5%9E%8B%E9%80%89%E5%9E%8B.md) —— 五档 checkpoint 阶梯、三条趋势线、选型论证
+- [`docs/AMP_vs_PPO对照实验.md`](docs/AMP_vs_PPO%E5%AF%B9%E7%85%A7%E5%AE%9E%E9%AA%8C.md) —— λ 三档消融，回答"AMP 比 PPO 好在哪"
+- [`docs/AMP_vs_DeepMimic对照实验.md`](docs/AMP_vs_DeepMimic%E5%AF%B9%E7%85%A7%E5%AE%9E%E9%AA%8C.md) —— 同源对照 + 源码级论证，"形状对但没走到"
+- [`docs/训练曲线分析.md`](docs/%E8%AE%AD%E7%BB%83%E6%9B%B2%E7%BA%BF%E5%88%86%E6%9E%90.md) —— 训练过程的判读与一次结论更正
+- [`docs/量化评估结果.md`](docs/%E9%87%8F%E5%8C%96%E8%AF%84%E4%BC%B0%E7%BB%93%E6%9E%9C.md) —— 早期评估结果
 
 **过程记录**
-- `docs/PROGRESS.md` —— 进度看板
-- `docs/开发日志.md` —— 按时间追加的踩坑记录（现象→排查→真凶→规律）
-- `docs/决策清单与专业判断.md` —— 哪些是自己的判断、AI 帮做了什么
-- `docs/技术路线与AMP原理.md` —— 原理推导
-- `docs/今日工作报告_2026-10-19.md`、`docs/建仓库与Git备份.md`
+- [`docs/PROGRESS.md`](docs/PROGRESS.md) —— 进度看板
+- [`docs/开发日志.md`](docs/%E5%BC%80%E5%8F%91%E6%97%A5%E5%BF%97.md) —— 按时间追加的踩坑记录（现象→排查→真凶→规律）
+- [`docs/决策清单与专业判断.md`](docs/%E5%86%B3%E7%AD%96%E6%B8%85%E5%8D%95%E4%B8%8E%E4%B8%93%E4%B8%9A%E5%88%A4%E6%96%AD.md) —— 哪些是自己的判断、AI 帮做了什么
+- [`docs/技术路线与AMP原理.md`](docs/%E6%8A%80%E6%9C%AF%E8%B7%AF%E7%BA%BF%E4%B8%8EAMP%E5%8E%9F%E7%90%86.md) —— 原理推导
+- [`docs/今日工作报告_2026-10-19.md`](docs/%E4%BB%8A%E6%97%A5%E5%B7%A5%E4%BD%9C%E6%8A%A5%E5%91%8A_2026-10-19.md)、[`docs/建仓库与Git备份.md`](docs/%E5%BB%BA%E4%BB%93%E5%BA%93%E4%B8%8EGit%E5%A4%87%E4%BB%BD.md)
 
 ## 8. 诚实红线
 
