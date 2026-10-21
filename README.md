@@ -129,7 +129,8 @@ g1-amp-locomotion/
 **实验与推导**
 - [`docs/步态量化对比与模型选型.md`](docs/%E6%AD%A5%E6%80%81%E9%87%8F%E5%8C%96%E5%AF%B9%E6%AF%94%E4%B8%8E%E6%A8%A1%E5%9E%8B%E9%80%89%E5%9E%8B.md) —— 五档 checkpoint 阶梯、三条趋势线、选型论证
 - [`docs/AMP_vs_PPO对照实验.md`](docs/AMP_vs_PPO%E5%AF%B9%E7%85%A7%E5%AE%9E%E9%AA%8C.md) —— λ 三档消融，回答"AMP 比 PPO 好在哪"
-- [`docs/AMP_vs_DeepMimic对照实验.md`](docs/AMP_vs_DeepMimic%E5%AF%B9%E7%85%A7%E5%AE%9E%E9%AA%8C.md) —— 同源对照 + 源码级论证，"形状对但没走到"
+- [`docs/AMP_vs_DeepMimic对照实验.md`](docs/AMP_vs_DeepMimic%E5%AF%B9%E7%85%A7%E5%AE%9E%E9%AA%8C.md) —— 同源对照 + 源码级论证
+- [`docs/公平对比方法论与遗留问题.md`](docs/%E5%85%AC%E5%B9%B3%E5%AF%B9%E6%AF%94%E6%96%B9%E6%B3%95%E8%AE%BA%E4%B8%8E%E9%81%97%E7%95%99%E9%97%AE%E9%A2%98.md) —— 能力边界矩阵、速度匹配对照、"丑"的可证伪化、遗留问题清单
 - [`docs/训练曲线分析.md`](docs/%E8%AE%AD%E7%BB%83%E6%9B%B2%E7%BA%BF%E5%88%86%E6%9E%90.md) —— 训练过程的判读与一次结论更正
 - [`docs/量化评估结果.md`](docs/%E9%87%8F%E5%8C%96%E8%AF%84%E4%BC%B0%E7%BB%93%E6%9E%9C.md) —— 早期评估结果
 
