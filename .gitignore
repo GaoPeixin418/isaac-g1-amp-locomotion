@@ -16,6 +16,7 @@ wandb/
 
 # 大文件：motion 数据、USD 模型
 *.npz
+!backup/eval_out/*.npz
 *.usd
 *.usda
 *.usdc
@@ -24,6 +25,7 @@ data/motions/
 
 # 视频
 *.mp4
+!backup/videos/*.mp4
 *.webm
 
 # Hydra / 系统
@@ -36,4 +38,10 @@ data/motions/
 tmp/
 
 # 服务器快照备份（本地留档即可，每轮一个新目录会撑爆仓库）
-backup/
+#
+# ⚠️ 2026-10-21 修正：这里原本写的是 backup/，把整个 backup 目录忽略了，
+#    加上上面的 *.mp4 / *.npz 全局规则，导致全部演示视频和量化评估结果
+#    从未进入 Git —— 用户以为有云端备份，实际一次都没推上去。
+#    这里只忽略体积大的快照目录，交付物必须放行。
+backup/server/
+backup/checkpoints/
