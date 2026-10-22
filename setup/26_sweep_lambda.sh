@@ -57,7 +57,7 @@ rm -f /data/eval_out/sweep_runs.txt
 
 # λ=0.5 放第一个：它是最可能的赢家，也最先验证对称奖励在真 λ 下会不会崩。
 # 只要这一臂在 1500 iter 就高速崩，后面两臂不用看就知道要改奖励。
-for PAIR in "0.50:lam050" "0.25:lam025" "0.75:lam075"; do
+for PAIR in "0.5:lam050" "0.25:lam025" "0.75:lam075"; do
     L=${PAIR%%:*}
     TAG=${PAIR##*:}
 

@@ -109,8 +109,16 @@ fi
 ACTUAL=$(grep -h "task_style_lerp" "$LOGDIR/$NEW_RUN/params/agent.yaml" 2>/dev/null |
          tr -d ' ' | tail -1)
 log "===== [闸3/4] 复核 run=$NEW_RUN  实际 λ: ${ACTUAL:-<读不到>} ====="
-if [ "$ACTUAL" != "task_style_lerp:$LERP" ]; then
-    log "!! 实际 λ($ACTUAL) 与预期($LERP) 不符，杀掉训练"
+# 必须按**数值**比，不能按字符串比
+# 10-22 20:05 事故：LERP 传 0.50，而 yaml 里 Python 写出来是 0.5，
+# 字符串 "task_style_lerp:0.50" != "task_style_lerp:0.5" →
+# 闸 3 把 λ 完全正确的训练当成错的杀掉了。
+# 防错机制过度自信，和它要防的事故一样贵。
+GOT=$(echo "${ACTUAL:-}" | awk -F: '{print $2}' | tr -d ' ')
+GOT_N=$(awk -v v="${GOT:-nan}" 'BEGIN{printf "%g", v+0}')
+WANT_N=$(awk -v v="$LERP" 'BEGIN{printf "%g", v+0}')
+if [ "$GOT_N" != "$WANT_N" ]; then
+    log "!! 实际 λ($GOT_N) 与预期($WANT_N) 不符，杀掉训练"
     pkill -9 -f "train.py --task $TASK" 2>/dev/null
     exit 1
 fi
