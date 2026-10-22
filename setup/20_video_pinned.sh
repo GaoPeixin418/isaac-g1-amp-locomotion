@@ -50,6 +50,7 @@ rm -f "$LOGDIR/$AMP_RUN/videos/play/rl-video-step-0.mp4"
 # ---- 1) 6 档并排，走直线 --------------------------------------------------
 log "===== [1/3] 6 档并排 0.5→3.0 m/s (num_envs=6) ====="
 PIN_VEL="0.5,1.0,1.5,2.0,2.5,3.0" \
+    TASK=LeggedLab-Isaac-AMP-G1-Play-v0 \
     RUN=$AMP_RUN CKPT=$CKPT NUM_ENVS=6 VIDEO_LEN=$VIDEO_LEN \
     bash /data/setup/07_mid_eval.sh
 cp -f "$LOGDIR/$AMP_RUN/videos/play/rl-video-step-0.mp4" \
@@ -61,6 +62,7 @@ cp -f "$LOGDIR/$AMP_RUN/videos/play/rl-video-step-0.mp4" \
 log "===== [2/3] 单机匀速 1.2 m/s (num_envs=1) ====="
 rm -f "$LOGDIR/$AMP_RUN/videos/play/rl-video-step-0.mp4"
 PIN_VEL="1.2" \
+    TASK=LeggedLab-Isaac-AMP-G1-Play-v0 \
     RUN=$AMP_RUN CKPT=$CKPT NUM_ENVS=1 VIDEO_LEN=$VIDEO_LEN \
     bash /data/setup/07_mid_eval.sh
 cp -f "$LOGDIR/$AMP_RUN/videos/play/rl-video-step-0.mp4" \
