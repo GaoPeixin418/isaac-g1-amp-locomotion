@@ -38,7 +38,7 @@ if [ ! -f "$CKPT_PATH" ]; then
 fi
 log "play: task=$TASK ckpt=$CKPT_PATH num_envs=$NUM_ENVS video_len=$VIDEO_LEN"
 
-timeout -s KILL 1200 yes Yes | "$PY" scripts/rsl_rl/play.py \
+timeout -s KILL "${EVAL_TIMEOUT:-1200}" yes Yes | "$PY" scripts/rsl_rl/play.py \
     --task "$TASK" \
     --headless \
     --num_envs "$NUM_ENVS" \
