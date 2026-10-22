@@ -36,6 +36,9 @@ MAX_ITER=${MAX_ITER:-2000}
 SEED=${SEED:-42}
 RESUME=${RESUME:-0}
 CKPT=${CKPT:-}
+# 续训时必须显式指定 run 目录。
+# 用 .* 会命中「最近修改的」run，一旦别的操作碰过目录就会加载错权重。
+LOAD_RUN=${LOAD_RUN:-2026-10-22_15-52-15}
 
 log() { echo "[$(date '+%m-%d %H:%M:%S')] $*"; }
 
@@ -70,8 +73,12 @@ if [ "$RESUME" = "1" ]; then
         log "!! RESUME=1 但没给 CKPT，中止"
         exit 1
     fi
-    EXTRA_ARGS="--resume --load_run .* --checkpoint $CKPT"
-    log "  续训: CKPT=$CKPT"
+    EXTRA_ARGS="--resume --load_run $LOAD_RUN --checkpoint $CKPT"
+    log "  续训: run=$LOAD_RUN  CKPT=$CKPT  -> 目标 MAX_ITER=$MAX_ITER"
+    if [ ! -f "/data/legged_lab/logs/rsl_rl/g1_amp/$LOAD_RUN/$CKPT" ]; then
+        log "!! 权重不存在: /data/legged_lab/logs/rsl_rl/g1_amp/$LOAD_RUN/$CKPT，中止"
+        exit 1
+    fi
 fi
 
 # shellcheck disable=SC2086
