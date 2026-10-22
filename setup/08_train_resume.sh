@@ -23,7 +23,14 @@ TASK="${TASK:-LeggedLab-Isaac-AMP-G1-v0}"
 RUN="${RUN:-2026-10-19_16-37-21}"
 NUM_ENVS="${NUM_ENVS:-4096}"
 MAX_ITER="${MAX_ITER:-7000}"    # resume 模式下的目标总数
-LERP="${LERP:-0.5}"             # task_style_lerp: 0.3 保守 / 0.5 默认 / 0.7 重风格
+LERP="${LERP:-0.5}"             # task_style_lerp（λ）
+# ⚠️ 2026-10-22 更正：λ 的语义与直觉相反！
+#    r = λ * r_task + (1-λ) * r_style   （rsl_rl/modules/amp.py:203）
+#    λ=0.0 -> 纯模仿，无任务奖励 -> 站着不动
+#    λ=0.5 -> 标准 AMP          <- 默认
+#    λ=1.0 -> 纯任务 = 普通 PPO，风格奖励系数 0
+#    即：λ 越大越"重任务"，越小越"重风格"。
+#    原注释写的"0.3 保守 / 0.7 重风格"是反的，也是 10-22 事故的思想根源。
 SCALE="${SCALE:-2.0}"           # style_reward_scale
 LOG=/data/logs/train_resume.log
 
@@ -39,11 +46,29 @@ DEFAULT_SCALE=2.0
 
 if [ "$MODE" = "sweep" ] || [ "$LERP" != "$DEFAULT_LERP" ] || [ "$SCALE" != "$DEFAULT_SCALE" ]; then
     echo "[INFO] patch $CFG  task_style_lerp=$LERP style_reward_scale=$SCALE"
-    cp "$CFG" "$CFG.bak"
+    # 备份到独立的 .thisrun 文件，**不覆盖 .bak**：
+    # .bak 里可能残留着上一次的旧值（曾经的 0.0），拿来还原就是新事故
+    cp "$CFG" "$CFG.thisrun"
+    DID_BACKUP=1
     sed -i "s/task_style_lerp=[0-9.]*/task_style_lerp=$LERP/g" "$CFG"
     sed -i "s/style_reward_scale=[0-9.]*/style_reward_scale=$SCALE/g" "$CFG"
     grep -n "amp_discriminator=RslRlAmpCfg.AMPDiscriminatorCfg" -A 2 "$CFG"
 fi
+
+# ⚠️ 本脚本会**永久修改 legged_lab 源码里的 cfg**（不是本次 run 的副本）。
+#    10-22 事故：这里改完 1.0 忘还原，之后 3 个 run 全是纯 PPO，4 小时白烧。
+#    所以挂一个 trap：不管正常结束、报错还是被 Ctrl-C，都把 cfg 还原回去。
+#    DID_BACKUP 标志很重要：只有**本次**真的备份过才还原。
+#    否则会拿 .bak 里上一次残留的旧值（曾经是 λ=0.0）覆盖当前值，制造新事故。
+DID_BACKUP=0
+restore_cfg() {
+    if [ "$DID_BACKUP" = "1" ] && [ -f "$CFG.thisrun" ]; then
+        cp -f "$CFG.thisrun" "$CFG"
+        rm -f "$CFG.thisrun"
+        echo "[INFO] 已还原 cfg: $(grep -o 'task_style_lerp=[0-9.]*' "$CFG")"
+    fi
+}
+trap restore_cfg EXIT
 
 # ---------------------------------------------------------------------------
 case "$MODE" in
