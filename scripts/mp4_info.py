@@ -47,8 +47,9 @@ def walk(f, end, depth=0):
             h = struct.unpack(">I", f.read(4))[0] >> 16
             print(f"  track size = {w}x{h}")
         elif typ in ("moov", "trak", "mdia"):
-            if typ in ("moov", "trak"):
-                f.read(4)  # mvhd/tkhd 已在上面处理容器头
+            # 容器 box 的子 box 紧跟容器头，没有额外字段。
+            # 之前这里多读了 4 字节，导致 mvhd 的 size 字段被当成容器头吞掉，
+            # 后续全部错位 —— 表现是「只打印文件名，时长/分辨率都读不出来」。
             walk(f, body_end, depth + 1)
 
         f.seek(body_end)
