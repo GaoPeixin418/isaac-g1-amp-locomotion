@@ -80,8 +80,9 @@ import shutil
 import sys
 from pathlib import Path
 
-MARK = "[PATCHED-PIN-CMD-v4]"
-OLD_MARKS = ("[PATCHED-PIN-CMD-v3]", "[PATCHED-PIN-CMD-v2]", "[PATCHED-PIN-CMD]")
+MARK = "[PATCHED-PIN-CMD-v5]"
+OLD_MARKS = ("[PATCHED-PIN-CMD-v4]", "[PATCHED-PIN-CMD-v3]",
+             "[PATCHED-PIN-CMD-v2]", "[PATCHED-PIN-CMD]")
 DEFAULT = "/data/legged_lab/scripts/rsl_rl/play.py"
 
 BLOCK = '''
@@ -161,9 +162,9 @@ BLOCK = '''
                         _vcc = getattr(env.unwrapped, "viewport_camera_controller", None)
                         if _vcc is not None:
                             _eye = [float(_x) for _x in
-                                    _os.environ.get("CAM_EYE", "2.2,2.2,1.4").split(",")]
+                                    _os.environ.get("CAM_EYE", "2.0,2.0,1.2").split(",")]
                             _look = [float(_x) for _x in
-                                     _os.environ.get("CAM_LOOKAT", "0.0,0.0,0.9").split(",")]
+                                     _os.environ.get("CAM_LOOKAT", "0.0,0.0,0.1").split(",")]
                             _vcc.cfg.env_index = 0
                             _vcc.update_view_location(eye=_eye, lookat=_look)
                             _vcc.update_view_to_asset_root("robot")
@@ -172,6 +173,15 @@ BLOCK = '''
                             print("[CMD] viewport_camera_controller 不存在，相机保持默认")
                     except Exception as _ce:
                         print("[CMD] 相机跟随设置失败: %r" % (_ce,))
+
+                # ---- v5: 关速度指令的调试箭头（蓝绿大箭头挡视线） ----
+                # amp_env_cfg.py:81 debug_vis=True 是源码默认；运行时关掉。
+                # set_debug_vis(False) 走 _set_debug_vis_impl，已创建的标记会隐藏。
+                try:
+                    _term.set_debug_vis(False)
+                    print("[CMD] base_velocity debug_vis 已关闭")
+                except Exception as _de:
+                    print("[CMD] 关 debug_vis 失败: %r" % (_de,))
 
             _c = globals()["_CMD_CTL"]
             _c["t"] += _c["dt"]
@@ -219,7 +229,7 @@ def patch(path: Path) -> int:
 
     src = path.read_text(encoding="utf-8")
     if MARK in src:
-        print(f"== 已打过 v4 补丁，跳过: {path}")
+        print(f"== 已打过 v5 补丁，跳过: {path}")
         return 0
 
     bak = path.with_suffix(path.suffix + ".precmd")
@@ -229,7 +239,7 @@ def patch(path: Path) -> int:
                 print("!! 检测到旧补丁但没有 .precmd 备份，不敢动，退出")
                 return 3
             src = bak.read_text(encoding="utf-8")
-            print(f"== 检测到 {om}，已从 .precmd 恢复，将重打 v4")
+            print(f"== 检测到 {om}，已从 .precmd 恢复，将重打 v5")
             break
 
     m = re.search(r"^(\s*)while\s+simulation_app\.is_running\(\)\s*:\s*$",
