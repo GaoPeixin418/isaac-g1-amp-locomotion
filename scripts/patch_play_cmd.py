@@ -34,6 +34,21 @@ v3 新增：指令斜坡限幅（2026-10-26）——治"启动前栽 + 换速顿
   （Unitree 官方控制器同样对速度指令做 ramp）。
 
 =============================================================================
+v4 新增：相机跟随（2026-10-26）——治"机器人走出画面"
+=============================================================================
+现象：单环境全向视频里，机器人前进十几秒后就走出画面（默认相机钉在
+      世界原点附近），11 s 之后画面里只剩地板。
+
+机制：Isaac Lab 的 ViewerCfg 默认 origin_type="world"，相机静止。
+      ViewportCameraController 原生支持 origin_type="asset_root"：
+      viewer_origin = 机器人根位置（只平移、不随偏航旋转），
+      并在每个渲染步的 post-update 事件里自动跟踪 —— 正是跟随相机。
+
+修法：在指令控制初始化时把 viewport_camera_controller 切到 asset_root
+      跟踪模式。eye/lookat 是相对机器人根的世界系偏移，不随朝向转，
+      转弯段世界不会跟着旋转，观感稳定。
+
+=============================================================================
 用法
 =============================================================================
     python scripts/patch_play_cmd.py [play.py 路径]
@@ -48,13 +63,16 @@ v3 新增：指令斜坡限幅（2026-10-26）——治"启动前栽 + 换速顿
     PIN_VEL="1.2"                    逗号分隔，每 env 一个，单值则广播
     RAMP_RATE="1.0"                  线速度变化率上限 m/s^2（默认 1.0）
     RAMP_RATE_W="1.0"                转向变化率上限 rad/s^2（默认 1.0）
+    CAM_FOLLOW="1"                   1=相机跟随机器人（默认开），0=固定相机
+    CAM_EYE="2.2,2.2,1.4"            相机相对机器人根的位置偏移（世界系）
+    CAM_LOOKAT="0.0,0.0,0.9"         注视点偏移
     OMNI_SCRIPT="秒, vx,vy,steer;..."  累计时长脚本，例：
         "2,0,0,0; 8,1.0,0,0; 14,1.0,0,0.6; 18,1.0,0,0; 22,0,0.4,0; 26,-0.4,0,0; 30,0,0,-0.6"
       steer 单位 rad，会换算成 heading 误差（训练用的就是 heading 模式）
 
 安全性：
   * 找不到插入点就报错退出，绝不破坏原文件
-  * 已打过 v3 补丁会跳过；检测到 v1/v2 会从 .precmd 恢复后重打（幂等升级）
+  * 已打过 v4 补丁会跳过；检测到 v1/v2/v3 会从 .precmd 恢复后重打（幂等升级）
   * 打补丁前自动备份为 <play.py>.precmd
 """
 import re
@@ -62,8 +80,8 @@ import shutil
 import sys
 from pathlib import Path
 
-MARK = "[PATCHED-PIN-CMD-v3]"
-OLD_MARKS = ("[PATCHED-PIN-CMD-v2]", "[PATCHED-PIN-CMD]")
+MARK = "[PATCHED-PIN-CMD-v4]"
+OLD_MARKS = ("[PATCHED-PIN-CMD-v3]", "[PATCHED-PIN-CMD-v2]", "[PATCHED-PIN-CMD]")
 DEFAULT = "/data/legged_lab/scripts/rsl_rl/play.py"
 
 BLOCK = '''
@@ -135,6 +153,26 @@ BLOCK = '''
                     cur=_th.zeros(2, dtype=_th.float32, device=_dev),
                 )
 
+                # ---- v4: 相机跟随（治"机器人走出画面"） ----
+                # asset_root 模式只跟随根位置，不随偏航旋转，转弯段世界系稳定。
+                # 跟踪由 post-update 事件驱动，每个渲染步自动执行，这里只需设一次。
+                if _os.environ.get("CAM_FOLLOW", "1") == "1":
+                    try:
+                        _vcc = getattr(env.unwrapped, "viewport_camera_controller", None)
+                        if _vcc is not None:
+                            _eye = [float(_x) for _x in
+                                    _os.environ.get("CAM_EYE", "2.2,2.2,1.4").split(",")]
+                            _look = [float(_x) for _x in
+                                     _os.environ.get("CAM_LOOKAT", "0.0,0.0,0.9").split(",")]
+                            _vcc.cfg.env_index = 0
+                            _vcc.update_view_location(eye=_eye, lookat=_look)
+                            _vcc.update_view_to_asset_root("robot")
+                            print("[CMD] 相机跟随: asset_root/robot eye=%s lookat=%s" % (_eye, _look))
+                        else:
+                            print("[CMD] viewport_camera_controller 不存在，相机保持默认")
+                    except Exception as _ce:
+                        print("[CMD] 相机跟随设置失败: %r" % (_ce,))
+
             _c = globals()["_CMD_CTL"]
             _c["t"] += _c["dt"]
 
@@ -181,7 +219,7 @@ def patch(path: Path) -> int:
 
     src = path.read_text(encoding="utf-8")
     if MARK in src:
-        print(f"== 已打过 v3 补丁，跳过: {path}")
+        print(f"== 已打过 v4 补丁，跳过: {path}")
         return 0
 
     bak = path.with_suffix(path.suffix + ".precmd")
@@ -191,7 +229,7 @@ def patch(path: Path) -> int:
                 print("!! 检测到旧补丁但没有 .precmd 备份，不敢动，退出")
                 return 3
             src = bak.read_text(encoding="utf-8")
-            print(f"== 检测到 {om}，已从 .precmd 恢复，将重打 v3")
+            print(f"== 检测到 {om}，已从 .precmd 恢复，将重打 v4")
             break
 
     m = re.search(r"^(\s*)while\s+simulation_app\.is_running\(\)\s*:\s*$",
