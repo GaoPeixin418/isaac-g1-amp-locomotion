@@ -55,6 +55,9 @@ log "===== [0/4] 校验补丁 ====="
 record() {  # $1=run $2=tag
     local run=$1 tag=$2
     local ckpt=model_1499.pt
+    if [ -f "$OUT/${tag}_multi10_12.mp4" ]; then
+        log "== $tag 已存在，跳过（断点续录）"; return 0
+    fi
     if [ ! -f "$LOGDIR/$run/$ckpt" ]; then
         log "!! 缺权重 $run/$ckpt，跳过"; return 1
     fi
