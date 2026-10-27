@@ -63,6 +63,10 @@ EARLY_MIN_ITER = int(os.environ.get("EARLY_MIN_ITER", "1500"))
 EARLY_PATIENCE = int(os.environ.get("EARLY_PATIENCE", "3"))
 EARLY_MARGIN = float(os.environ.get("EARLY_MARGIN", "0.98"))  # 需改善 >2% 才算改善
 
+# 一直没学会走 -> 杀（v2.1 实测：v_act 0.05-0.07 直到 iter 1200，
+# 每个评估点都因硬门槛作废 => 早停永远不触发 => 白烧 2 小时 GPU）
+NEVER_WALK_ITER = int(os.environ.get("NEVER_WALK_ITER", "1000"))
+
 HEADER = ("iter,time,leg_ai,hip_ai,knee_ai,cadence,stride_m,knee_deg,height_m,"
           "v_cmd,v_act,score,best_score,ckpt\n")
 
@@ -175,6 +179,7 @@ def main():
 
     best_score, best_iter = float("inf"), -1
     no_improve = 0
+    any_walk = False
     print("[watch-v2] start every=%d min_iter=%d patience=%d"
           % (EVERY, EARLY_MIN_ITER, EARLY_PATIENCE), flush=True)
 
@@ -234,6 +239,8 @@ def main():
 
         # 硬门槛：没在走，这一整点作废（iter400 那次 13.3% 是站着不动的假象）
         walking = m["v_act"] >= 0.7 * max(m["v_cmd"], 1e-6)
+        if walking:
+            any_walk = True
         sc = score_of(m) if walking else float("inf")
 
         if walking and sc < best_score:
@@ -269,6 +276,14 @@ def main():
                   % (no_improve, best_iter, best_score), flush=True)
             kill_training()
             print("[watch-v2] EARLY STOP AT iter=%d  best=%d" % (it, best_iter), flush=True)
+            return
+
+        # 一直没学会走路：配置性失败，直接杀，不再等 2400（v2.1 的教训）
+        if (not any_walk) and it >= NEVER_WALK_ITER:
+            print("[watch-v2] 到 iter=%d 仍 v_act<0.7*cmd（配置没学会走路）-> 杀训练"
+                  % it, flush=True)
+            kill_training()
+            print("[watch-v2] NEVER-WALKED STOP AT iter=%d" % it, flush=True)
             return
 
         if once:
