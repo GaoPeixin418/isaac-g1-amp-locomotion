@@ -181,8 +181,10 @@ def main(env_cfg, agent_cfg):
     # joint_pos 必须记：2026-10-27 用户反馈"膝盖大部分时间弯着"，而历史 npz
     # 里只有 torque / foot_z / joint_vel，没有关节角，导致这个主诉无法量化。
     # 姿态类问题（蹲着走、躯干前倾、勾脚）全靠这一列，缺了就只能靠肉眼看视频。
+    # root_pos_z 必须记：蹲姿的最终观测量是躯干高度，膝角可以被策略靠
+    # "把屈曲转移到髋/踝"绕过，躯干高度绕不过去。
     records = {"lin_vel_x": [], "lin_vel_y": [], "foot_z": [], "torque": [],
-               "joint_vel": [], "cmd_x": [], "joint_pos": []}
+               "joint_vel": [], "cmd_x": [], "joint_pos": [], "root_pos_z": []}
     if has_contact:
         records["foot_force_z"] = []
 
@@ -204,6 +206,7 @@ def main(env_cfg, agent_cfg):
             records["torque"].append(robot.data.applied_torque.cpu().numpy().astype(np.float32))
             records["joint_vel"].append(robot.data.joint_vel.cpu().numpy().astype(np.float32))
             records["joint_pos"].append(robot.data.joint_pos.cpu().numpy().astype(np.float32))
+            records["root_pos_z"].append(robot.data.root_pos_w[:, 2].cpu().numpy().astype(np.float32))
             if has_contact:
                 csensor = base_env.scene["contact_forces"]
                 records["foot_force_z"].append(
