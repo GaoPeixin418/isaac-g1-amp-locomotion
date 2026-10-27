@@ -82,9 +82,13 @@ def newest_npz(after_ts):
 def measure(npz):
     """算扭矩不对称 + 速度跟踪。
 
-    速度这一列是硬要求：iter 400 那次量出 13.3% 看着很好，结果实测速度只有
-    0.06 m/s —— 它根本没在走。站着不动当然左右对称。没有速度列，这条曲线
-    会把"还没学会走路"误报成"治好了"。
+    两道防线，都是踩过坑换来的：
+    1. 必须有速度列：iter 400 那次量出 13.3% 看着很好，结果实测速度只有
+       0.06 m/s —— 它根本没在走。站着不动当然左右对称。
+    2. 必须用逐关节 AI 的均值，不能用 6 关节合成：iter 1200 那次合力对称
+       (8.5%)，但髋 pitch L=18.9 vs R=10.3 (59%)、踝 roll L=10.2 vs R=4.6
+       (76%)，髋和膝踝方向相反而被抵消。合成指标会把"分工式跛行"报成
+       "对称"。leg_ai 一律取 mean over 6 joints of per-joint AI。
     """
     import numpy as np
     d = np.load(npz, allow_pickle=True)
@@ -93,36 +97,33 @@ def measure(npz):
     if D < 12:
         return None
     n0 = int(T * 0.3)
-    rows = []
-    for j in range(N):
-        t = tq[n0:, j, :]
-        rms = np.sqrt(np.mean(t ** 2, axis=0))
-        legL = float(np.sqrt(np.mean(rms[LEG_L] ** 2)))
-        legR = float(np.sqrt(np.mean(rms[LEG_R] ** 2)))
-        kneeL, kneeR = float(rms[3]), float(rms[9])
-        ai = lambda a, b: abs(a - b) / (0.5 * (abs(a) + abs(b))) * 100 if (abs(a) + abs(b)) > 1e-9 else float("nan")
-        rows.append((legL, legR, ai(legL, legR), kneeL, kneeR, ai(kneeL, kneeR)))
-    legL = sum(r[0] for r in rows) / len(rows)
-    legR = sum(r[1] for r in rows) / len(rows)
-    legai = sum(r[2] for r in rows) / len(rows)
-    kneeai = sum(r[5] for r in rows) / len(rows)
+
+    rms = np.sqrt(np.mean(tq[n0:] ** 2, axis=(0, 1)))  # (D,) 跨时间跨 env
+    ai = lambda a, b: abs(a - b) / (0.5 * (abs(a) + abs(b))) * 100 if (abs(a) + abs(b)) > 1e-9 else float("nan")
+    per = [ai(float(rms[k]), float(rms[k + 6])) for k in range(6)]
+    legai = float(np.mean(per))
+    hipai = float(per[0])
+    kneeai = float(per[3])
+    ankai = float(per[4])
+    legL = float(np.sqrt(np.mean(rms[LEG_L] ** 2)))
+    legR = float(np.sqrt(np.mean(rms[LEG_R] ** 2)))
 
     vcmd = float(np.mean(d["velocities"]))
     vact = float(np.mean([
         np.mean(np.hypot(d["lin_vel_x"][n0:, j], d["lin_vel_y"][n0:, j]))
         for j in range(d["lin_vel_x"].shape[1])
     ]))
-    return legL, legR, legai, kneeai, vcmd, vact
+    return legL, legR, legai, hipai, kneeai, ankai, vcmd, vact
 
 
 def main():
     once = "--once" in sys.argv
     os.makedirs("/data/progress", exist_ok=True)
-    HEADER = "iter,time,leg_ai_pct,knee_ai_pct,rms_L,rms_R,rms_mean,v_cmd,v_act,ckpt\n"
+    HEADER = "iter,time,leg_ai_pct,hip_ai_pct,knee_ai_pct,ankle_ai_pct,rms_L,rms_R,rms_mean,v_cmd,v_act,ckpt\n"
     need_hdr = True
     if os.path.exists(CSV):
         with open(CSV, encoding="utf-8") as f:
-            need_hdr = not f.readline().startswith("iter,time,leg_ai_pct")
+            need_hdr = "hip_ai_pct" not in f.readline()
     if need_hdr:
         with open(CSV, "w", encoding="utf-8") as f:
             f.write(HEADER)
@@ -181,14 +182,15 @@ def main():
             time.sleep(SLEEP)
             continue
 
-        legL, legR, legai, kneeai, vcmd, vact = m
+        legL, legR, legai, hipai, kneeai, ankai, vcmd, vact = m
         with open(CSV, "a", encoding="utf-8") as f:
-            f.write("%d,%s,%.1f,%.1f,%.1f,%.1f,%.1f,%.2f,%.2f,%s\n" % (
-                it, time.strftime("%m-%d %H:%M"), legai, kneeai,
+            f.write("%d,%s,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%.2f,%.2f,%s\n" % (
+                it, time.strftime("%m-%d %H:%M"), legai, hipai, kneeai, ankai,
                 legL, legR, 0.5 * (legL + legR), vcmd, vact, os.path.basename(ck)))
         flag = "  <<< 没在走，AI 无效" if vact < 0.4 * max(vcmd, 1e-6) else ""
-        print("[watch] iter=%d  legAI=%.1f%%  kneeAI=%.1f%%  rms %.1f/%.1f  "
-              "v_cmd=%.2f v_act=%.2f%s" % (it, legai, kneeai, legL, legR, vcmd, vact, flag),
+        print("[watch] iter=%d  legAI=%.1f%% (hip %.1f / knee %.1f / ankle %.1f)  "
+              "rms %.1f/%.1f  v_cmd=%.2f v_act=%.2f%s"
+              % (it, legai, hipai, kneeai, ankai, legL, legR, vcmd, vact, flag),
               flush=True)
 
         if once:
