@@ -52,7 +52,10 @@ CHECK_ONLY=0
 fail() { echo "!! $1"; exit 1; }
 
 echo "=================================================================="
-echo " 对照组 (WARMUP=0)  MAX_ITER=$MAX_ITER  ENVS=$NUM_ENVS  SEED=$SEED"
+echo " 启动器（实际参数以 WARMUP 值为准）"
+echo " WARMUP=$WARMUP  MAX_ITER=$MAX_ITER  ENVS=$NUM_ENVS  SEED=$SEED"
+echo "   WARMUP=0     -> 纯 v2.2 对照组"
+echo "   WARMUP=12000 -> v2.3（500 iter 斜坡）"
 echo " 训练日志 $TRAIN_LOG"
 echo " 监控日志 $WATCH_LOG"
 echo " 曲线     $CSV"
