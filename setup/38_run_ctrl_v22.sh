@@ -39,6 +39,11 @@ RUNROOT=$LAB/logs/rsl_rl/g1_amp
 MAX_ITER="${MAX_ITER:-1600}"
 NUM_ENVS="${NUM_ENVS:-4096}"
 SEED="${SEED:-42}"
+# WARMUP 走环境变量。默认 0 = 纯 v2.2 对照组；跑 v2.3 必须显式传 WARMUP=12000
+# ⚠️ 2026-11-11 事故：本行曾硬编码 env WARMUP=0，导致传给 38 的 WARMUP=12000
+#    被静默忽略，"v2.3"实际又跑了一次对照组（同 seed 下 ckpt md5 逐位相同才暴露）。
+#    教训：启动前必须 grep 训练日志头部 37 的 banner 行确认 WARMUP 实际值。
+WARMUP="${WARMUP:-0}"
 WATCH_EVERY="${WATCH_EVERY:-400}"      # 必须是 save_interval(200) 的倍数
 NEVER_WALK_ITER="${NEVER_WALK_ITER:-1200}"
 
@@ -114,9 +119,10 @@ fi
 # ============================ 启动 ============================
 mkdir -p /data/logs /data/progress
 touch /tmp/ctrl_v22_mark
+rm -f /tmp/ctrl_v22_warmup_checked
 
 echo "[$(date '+%m-%d %H:%M:%S')] 启动训练（后台）..."
-nohup env WARMUP=0 MAX_ITER="$MAX_ITER" NUM_ENVS="$NUM_ENVS" SEED="$SEED" \
+nohup env WARMUP="$WARMUP" MAX_ITER="$MAX_ITER" NUM_ENVS="$NUM_ENVS" SEED="$SEED" \
     bash /data/setup/37_train_fresh_v23.sh > "$TRAIN_LOG" 2>&1 &
 TPID=$!
 disown $TPID 2>/dev/null
@@ -124,6 +130,9 @@ echo "[$(date '+%m-%d %H:%M:%S')] train pid=$TPID"
 
 # 等新 run 目录出现再启监控：10-27 踩过 —— 监控先起会抓到上一轮的目录，
 # 把旧模型数据写进新曲线（latest_run 取 mtime 最新）。
+# 闸 6（2026-11-11 事故新增）：37 的 banner 行必须打印出与请求一致的 WARMUP。
+#   事故经过：38 曾硬编码 WARMUP=0，传进来的 12000 被静默忽略，
+#   "v2.3" 跑成了对照组第二次，靠 ckpt md5 逐位相同才暴露，烧了 45 分钟。
 echo "等待新 run 目录出现（Isaac 冷启动可能 1-8 分钟）..."
 NEWRUN=""
 for i in $(seq 1 180); do
@@ -132,6 +141,22 @@ for i in $(seq 1 180); do
         echo "!! 训练进程已退出，最后 25 行："
         tail -25 "$TRAIN_LOG"
         fail "训练启动失败，看 $TRAIN_LOG"
+    fi
+    # 自检：banner 一出现就核对 WARMUP
+    if [ ! -f /tmp/ctrl_v22_warmup_checked ]; then
+        BANNER=$(grep -m1 "^.*WARMUP=" "$TRAIN_LOG" 2>/dev/null | grep -o "WARMUP=[0-9]*" | head -1)
+        if [ -n "$BANNER" ]; then
+            echo "[$(date '+%m-%d %H:%M:%S')] 37 banner: $BANNER (请求值 WARMUP=$WARMUP)"
+            if [ "$BANNER" != "WARMUP=$WARMUP" ]; then
+                echo "!! WARMUP 不一致！实际 $BANNER vs 请求 $WARMUP —— 杀掉训练防止烧错配置"
+                kill -9 $TPID 2>/dev/null
+                for p in $(ps aux | grep "rsl_rl/[t]rain\.py" | grep -v grep | awk '{print $2}'); do
+                    kill -9 $p
+                done
+                fail "WARMUP 传参断裂，看 $TRAIN_LOG 头部"
+            fi
+            touch /tmp/ctrl_v22_warmup_checked
+        fi
     fi
     NEWRUN=$(find "$RUNROOT" -maxdepth 1 -mindepth 1 -type d -newer /tmp/ctrl_v22_mark 2>/dev/null | head -1)
     [ -n "$NEWRUN" ] && break
