@@ -1,0 +1,1 @@
+rho=0.9263 mae=0.259 lag_s=0.92 mae_up=0.297 mae_dn=0.328 gap_s=0.32
