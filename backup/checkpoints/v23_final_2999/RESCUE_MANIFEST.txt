@@ -1,0 +1,11 @@
+v2.3 最终模型抢救清单 (路线 B)
+server run: /data/legged_lab/logs/rsl_rl/g1_amp/2026-11-18_15-40-01
+server host: jq1.9gpu.com:12250  (RTX 4090, /data)
+
+文件 | 本地名 | 字节 | md5 | 校验
+model_2999.pt | model_2999.pt | 20072949 | ece2935026f23ca4a55634f73cdaf17f | OK
+params/env.yaml | env.yaml | 39554 | 225bbda3c05424bb452b810eae43a16e | OK
+params/agent.yaml | agent.yaml | 1687 | d17ec6e39a228a4c4b17b4ecb829a8af | OK
+exported/policy.onnx | policy.onnx | 1688924 | 1252f77bf9c48d4a4c7623c62e2af648 | OK
+git/rsl_rl.diff | rsl_rl.diff | 153 | 091d4be57769d4b33adc73567ef7594c | OK
+model_1600.pt | model_1600_resume_start.pt | 20072949 | f64374dd1f2ef023491d430f2e865fbc | OK

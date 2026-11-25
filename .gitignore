@@ -44,4 +44,8 @@ tmp/
 #    从未进入 Git —— 用户以为有云端备份，实际一次都没推上去。
 #    这里只忽略体积大的快照目录，交付物必须放行。
 backup/server/
-backup/checkpoints/
+backup/checkpoints/*
+# 2026-11-25 路线 B：最终模型「可复现最小集」是唯一一份、放手服务器后不可再生，
+# 必须像演示视频一样放行进云端。只放行这一个目录，其它 ckpt 仍全部忽略。
+!backup/checkpoints/v23_final_2999/
+!backup/checkpoints/v23_final_2999/*
